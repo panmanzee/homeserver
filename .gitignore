@@ -1,0 +1,24 @@
+# secrets — never commit real env files
+.env
+**/.env
+*.env
+!*.env.example
+!**/*.env.example
+
+# ansible
+*vault_pass*
+.vault_pass
+
+# python
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+**/.pytest_cache/
+.venv/
+**/.venv/
+
+# editor / OS
+.DS_Store
+*.swp
+*~

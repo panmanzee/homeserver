@@ -1,0 +1,89 @@
+{
+  "id": "newsPipeline0001",
+  "name": "News pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [ { "field": "hours", "hoursInterval": 2 } ] }
+      },
+      "id": "b1a1e100-0000-4000-8000-000000000001",
+      "name": "Every 2 hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://newsfeed-api:8000/ingest/rss",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": { "timeout": 120000 }
+      },
+      "id": "b1a1e100-0000-4000-8000-000000000002",
+      "name": "POST /ingest/rss",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [430, 300],
+      "credentials": {
+        "httpHeaderAuth": { "id": "newsfeedApiKey01", "name": "newsfeed X-API-Key" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://newsfeed-api:8000/enrich",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"limit\": 12 }",
+        "options": { "timeout": 300000 }
+      },
+      "id": "b1a1e100-0000-4000-8000-000000000003",
+      "name": "POST /enrich",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300],
+      "credentials": {
+        "httpHeaderAuth": { "id": "newsfeedApiKey01", "name": "newsfeed X-API-Key" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://newsfeed-api:8000/notify/urgent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": { "timeout": 120000 }
+      },
+      "id": "b1a1e100-0000-4000-8000-000000000004",
+      "name": "POST /notify/urgent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [890, 300],
+      "credentials": {
+        "httpHeaderAuth": { "id": "newsfeedApiKey01", "name": "newsfeed X-API-Key" }
+      }
+    }
+  ],
+  "connections": {
+    "Every 2 hours": {
+      "main": [ [ { "node": "POST /ingest/rss", "type": "main", "index": 0 } ] ]
+    },
+    "POST /ingest/rss": {
+      "main": [ [ { "node": "POST /enrich", "type": "main", "index": 0 } ] ]
+    },
+    "POST /enrich": {
+      "main": [ [ { "node": "POST /notify/urgent", "type": "main", "index": 0 } ] ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

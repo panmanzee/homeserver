@@ -1,0 +1,43 @@
+{
+  "id": "eodPrices000001",
+  "name": "EOD prices",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [ { "field": "days", "triggerAtHour": 18, "triggerAtMinute": 30 } ] }
+      },
+      "id": "c2b2f200-0000-4000-8000-000000000001",
+      "name": "Daily 18:30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://newsfeed-api:8000/prices/refresh",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"days\": 7 }",
+        "options": { "timeout": 300000 }
+      },
+      "id": "c2b2f200-0000-4000-8000-000000000002",
+      "name": "POST /prices/refresh",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [430, 300],
+      "credentials": {
+        "httpHeaderAuth": { "id": "newsfeedApiKey01", "name": "newsfeed X-API-Key" }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 18:30": {
+      "main": [ [ { "node": "POST /prices/refresh", "type": "main", "index": 0 } ] ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}
