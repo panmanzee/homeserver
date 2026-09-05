@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Awaitable, Callable
 
 import httpx
@@ -17,50 +18,85 @@ log = logging.getLogger("taskbot.telegram")
 _API = f"https://api.telegram.org/bot{settings.telegram_bot_token}"
 Handler = Callable[[str, int], Awaitable[str | None]]
 
+# The bot token appears in every API URL path; scrub it from anything that could
+# reach a log line (exception strings, tracebacks, response bodies).
+_TOKEN_RE = re.compile(re.escape(settings.telegram_bot_token)) if settings.telegram_bot_token else None
+
+
+def _redact(s: str) -> str:
+    return _TOKEN_RE.sub("bot<REDACTED>", s) if _TOKEN_RE else s
+
 
 class TelegramTransient(RuntimeError):
-    pass
+    """Retryable failure (429 / 5xx / network). Message is always token-free."""
 
 
-@retry(retry=retry_if_exception_type(TelegramTransient),
-       stop=stop_after_attempt(4), wait=wait_exponential(min=1, max=20), reraise=True)
-def send_message(text: str) -> None:
-    if not text:
-        return
-    for chunk in _split(text, 4000):
-        try:
-            r = httpx.post(f"{_API}/sendMessage",
-                           json={"chat_id": settings.telegram_chat_id, "text": chunk},
-                           timeout=settings.http_timeout)
-        except httpx.HTTPError as exc:
-            raise TelegramTransient(str(exc)) from exc
-        if r.status_code in (429, 500, 502, 503):
-            raise TelegramTransient(f"telegram {r.status_code}")
-        if r.status_code >= 400:
-            log.error("telegram sendMessage %s: %s", r.status_code, r.text)
-            return
-        db.log_message("out", chunk)
+class TelegramError(RuntimeError):
+    """Non-retryable failure (4xx other than 429). Message is always token-free."""
+
+
+def _is_transient(status: int) -> bool:
+    return status == 429 or status >= 500
 
 
 def _split(text: str, limit: int) -> list[str]:
     if len(text) <= limit:
         return [text]
-    out, cur = [], ""
+    out: list[str] = []
+    cur = ""
     for line in text.splitlines(keepends=True):
-        if len(cur) + len(line) > limit:
+        while len(line) > limit:
+            if cur:
+                out.append(cur)
+                cur = ""
+            out.append(line[:limit])
+            line = line[limit:]
+        if cur and len(cur) + len(line) > limit:
             out.append(cur)
-            cur = ""
-        cur += line
+            cur = line
+        else:
+            cur += line
     if cur:
         out.append(cur)
     return out
 
 
+@retry(retry=retry_if_exception_type(TelegramTransient),
+       stop=stop_after_attempt(4), wait=wait_exponential(min=1, max=20), reraise=True)
+def _post_chunk(chunk: str) -> None:
+    try:
+        r = httpx.post(f"{_API}/sendMessage",
+                       json={"chat_id": settings.telegram_chat_id, "text": chunk},
+                       timeout=settings.http_timeout)
+    except httpx.HTTPError as exc:
+        raise TelegramTransient(_redact(str(exc))) from None
+    if _is_transient(r.status_code):
+        raise TelegramTransient(f"telegram sendMessage {r.status_code}")
+    if r.status_code >= 400:
+        log.error("telegram sendMessage %s: %s", r.status_code, _redact(r.text))
+        return
+    db.log_message("out", chunk)
+
+
+def send_message(text: str) -> None:
+    if not text:
+        return
+    for chunk in _split(text, 4000):
+        if chunk:
+            _post_chunk(chunk)
+
+
 async def _get_updates(client: httpx.AsyncClient, offset: int) -> list[dict]:
-    r = await client.get(f"{_API}/getUpdates",
-                         params={"offset": offset, "timeout": 30},
-                         timeout=40)
-    r.raise_for_status()
+    try:
+        r = await client.get(f"{_API}/getUpdates",
+                             params={"offset": offset, "timeout": 30},
+                             timeout=40)
+    except httpx.HTTPError as exc:
+        raise TelegramTransient(f"getUpdates request failed: {_redact(str(exc))}") from None
+    if _is_transient(r.status_code):
+        raise TelegramTransient(f"getUpdates {r.status_code}")
+    if r.status_code >= 400:
+        raise TelegramError(f"getUpdates {r.status_code}")
     return r.json().get("result", [])
 
 
@@ -99,6 +135,6 @@ async def poll_forever(handle: Handler) -> None:
                     await run_once(updates, handle)
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                log.exception("poll loop error; backing off 5s")
+            except Exception as exc:
+                log.exception("poll loop error; backing off 5s: %s", _redact(str(exc)))
                 await asyncio.sleep(5)
