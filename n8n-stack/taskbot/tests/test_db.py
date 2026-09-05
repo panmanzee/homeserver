@@ -10,14 +10,18 @@ pytestmark = pytest.mark.skipif(not DB_URL, reason="set TASKBOT_TEST_DB_URL to r
 def db(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", DB_URL)
     import importlib
+    from app import config as cfg_mod
+    importlib.reload(cfg_mod)           # rebuild the Settings singleton with the scratch URL
     from app import db as db_mod
-    importlib.reload(db_mod)
+    importlib.reload(db_mod)            # db.py re-runs `from .config import settings` -> fresh
     db_mod.pool.open()
     with db_mod.pool.connection() as c:
         c.execute("DROP TABLE IF EXISTS tasks, bot_state, google_oauth, message_log CASCADE")
     db_mod.apply_schema()
     yield db_mod
     db_mod.pool.close()
+    importlib.reload(cfg_mod)           # restore for any later test
+    importlib.reload(db_mod)
 
 
 def test_offset_roundtrip(db):

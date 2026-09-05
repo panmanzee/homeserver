@@ -17,7 +17,11 @@ pool = ConnectionPool(
     min_size=0,
     max_size=5,
     open=False,
-    kwargs={"row_factory": dict_row},
+    # connect_timeout bounds each libpq connect attempt (~10s) so a
+    # misconfigured DATABASE_URL fails fast instead of blocking forever;
+    # timeout bounds how long pool.connection() waits for a free slot.
+    kwargs={"row_factory": dict_row, "connect_timeout": 10},
+    timeout=15,
 )
 
 _SCHEMA = (pathlib.Path(__file__).parent.parent / "schema.sql").read_text()
