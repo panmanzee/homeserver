@@ -10,6 +10,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 
+from . import clock
 from .config import settings
 
 pool = ConnectionPool(
@@ -64,6 +65,16 @@ def log_message(direction: str, text: str, *, tg_message_id: int | None = None,
         )
 
 
+def prune_message_log(days: int) -> int:
+    """Delete message_log rows older than `days`. Returns the row count removed."""
+    with pool.connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM message_log WHERE created_at < now() - make_interval(days => %s)",
+            (days,),
+        )
+        return cur.rowcount
+
+
 # --- tasks ----------------------------------------------------------------
 def create_task(*, title: str, due_date: date | None = None,
                 scheduled_start: datetime | None = None,
@@ -96,9 +107,9 @@ def tasks_for_day(day: date) -> list[dict[str, Any]]:
     with pool.connection() as conn:
         return conn.execute(
             "SELECT * FROM tasks WHERE status = 'pending' AND "
-            "(due_date = %s OR scheduled_start::date = %s) "
+            "(due_date = %s OR (scheduled_start AT TIME ZONE %s)::date = %s) "
             "ORDER BY scheduled_start NULLS LAST, id",
-            (day, day),
+            (day, clock.tz_name(), day),
         ).fetchall()
 
 
@@ -126,7 +137,8 @@ def reschedule_task(task_id: int, *, due_date: date | None = None,
     with pool.connection() as conn:
         return conn.execute(
             "UPDATE tasks SET due_date = COALESCE(%s, due_date), "
-            "scheduled_start = %s, scheduled_end = %s, updated_at = now() "
+            "scheduled_start = COALESCE(%s, scheduled_start), "
+            "scheduled_end = COALESCE(%s, scheduled_end), updated_at = now() "
             "WHERE id = %s RETURNING *",
             (due_date, scheduled_start, scheduled_end, task_id),
         ).fetchone()

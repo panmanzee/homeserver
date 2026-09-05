@@ -19,6 +19,11 @@ def _zone() -> ZoneInfo:
         return ZoneInfo("UTC")
 
 
+def zone() -> ZoneInfo:
+    """The user's configured IANA zone (falls back to UTC on a bad value)."""
+    return _zone()
+
+
 def tz_name() -> str:
     return str(_zone())
 

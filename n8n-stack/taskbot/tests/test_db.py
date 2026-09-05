@@ -58,3 +58,27 @@ def test_google_oauth_upsert(db):
     db.upsert_google_oauth("rt-2", "cal-1")
     row = db.get_google_oauth()
     assert row["refresh_token"] == "rt-2"
+
+
+def test_reschedule_date_only_keeps_time(db):
+    from datetime import datetime, timedelta, timezone
+    start = datetime(2026, 9, 6, 23, 0, tzinfo=timezone.utc)
+    t = db.create_task(title="gym", scheduled_start=start,
+                       scheduled_end=start + timedelta(hours=1))
+    from datetime import date
+    moved = db.reschedule_task(t["id"], due_date=date(2026, 9, 11))
+    assert moved["due_date"] == date(2026, 9, 11)
+    assert moved["scheduled_start"] == start          # F6: time not nulled
+    assert moved["scheduled_end"] == start + timedelta(hours=1)
+
+
+def test_prune_message_log(db):
+    with db.pool.connection() as c:
+        c.execute("INSERT INTO message_log (direction, text, created_at) "
+                  "VALUES ('in', 'old', now() - interval '40 days'), "
+                  "('in', 'fresh', now())")
+    removed = db.prune_message_log(30)
+    assert removed == 1
+    with db.pool.connection() as c:
+        left = [r["text"] for r in c.execute("SELECT text FROM message_log ORDER BY id").fetchall()]
+    assert left == ["fresh"]

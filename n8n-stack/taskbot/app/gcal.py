@@ -3,10 +3,11 @@ Every public function is a no-op when Google isn't configured."""
 
 from __future__ import annotations
 
+import functools
 import logging
 from datetime import date, datetime, timedelta
 
-from . import clock, db
+from . import db
 from .config import settings
 
 log = logging.getLogger("taskbot.gcal")
@@ -32,6 +33,10 @@ def _creds():
 
 
 def enabled() -> bool:
+    # Cheap gate first: no refresh token => mirror is off, so don't hit the DB
+    # (get_google_oauth) or import google-auth on every task message.
+    if not settings.google_refresh_token:
+        return False
     creds, cal = _creds()
     return bool(creds and cal)
 
@@ -50,10 +55,12 @@ def _body(row: dict) -> dict:
     if row.get("scheduled_start"):
         s: datetime = row["scheduled_start"]
         e: datetime = row["scheduled_end"] or (s + timedelta(hours=1))
-        tz = clock.tz_name()
+        # scheduled_start is timestamptz and _parse_dt now attaches the user's
+        # zone, so isoformat() carries the correct RFC3339 offset — no separate
+        # "timeZone" key needed (and no naive-datetime wall-clock bug).
         return {"summary": row["title"],
-                "start": {"dateTime": s.isoformat(), "timeZone": tz},
-                "end": {"dateTime": e.isoformat(), "timeZone": tz}}
+                "start": {"dateTime": s.isoformat()},
+                "end": {"dateTime": e.isoformat()}}
     d: date = row["due_date"] or date.today()
     return {"summary": row["title"],
             "start": {"date": d.isoformat()},
@@ -61,10 +68,11 @@ def _body(row: dict) -> dict:
 
 
 def _guard(fn):
+    @functools.wraps(fn)
     def inner(row: dict):
-        if not enabled():
-            return
         try:
+            if not enabled():
+                return
             fn(row)
         except Exception:
             log.exception("gcal sync failed (task %s); continuing", row.get("id"))

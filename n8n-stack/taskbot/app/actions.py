@@ -10,6 +10,8 @@ from .intent import Intent
 
 _HINT = ('try e.g. "math homework today", "gym at 11pm", '
          '"done with the gym", "what\'s today"')
+_DATE_HINT = "I couldn't read that date/time — try 'tomorrow' or 2026-09-10"
+_WHEN_HINT = "tell me when — e.g. 'friday' or 'tomorrow 3pm'"
 
 
 def _parse_date(s: str | None) -> date | None:
@@ -17,7 +19,9 @@ def _parse_date(s: str | None) -> date | None:
 
 
 def _parse_dt(s: str | None) -> datetime | None:
-    return datetime.fromisoformat(s) if s else None
+    # Attach the user's zone so scheduled_start (timestamptz) stores the right
+    # instant and the Google Calendar event lands at the intended wall-clock.
+    return datetime.fromisoformat(s).replace(tzinfo=clock.zone()) if s else None
 
 
 def _fmt_day(d: date | None) -> str:
@@ -38,8 +42,10 @@ def add_task(i: Intent) -> tuple[str, dict]:
     return f'✅ added "{row["title"]}" for {_fmt_day(due)}', row
 
 
-def add_event(i: Intent) -> tuple[str, dict]:
+def add_event(i: Intent) -> tuple[str, dict | None]:
     start = _parse_dt(i.start)
+    if start is None:
+        return _WHEN_HINT, None
     end = _parse_dt(i.end) or (start + timedelta(minutes=i.estimate_minutes or 60))
     row = db.create_task(title=i.title or "untitled", scheduled_start=start,
                          scheduled_end=end, estimate_minutes=i.estimate_minutes)
@@ -48,15 +54,21 @@ def add_event(i: Intent) -> tuple[str, dict]:
 
 
 def complete_task(i: Intent) -> tuple[str, dict | None]:
-    if not i.target_task_id or not db.get_task(i.target_task_id):
+    existing = db.get_task(i.target_task_id) if i.target_task_id else None
+    if not existing:
         return (i.note or f"which task? {_HINT}"), None
+    if existing["status"] != "pending":
+        return f'that task is already {existing["status"]}', None
     row = db.set_status(i.target_task_id, "done")
     return f'✔️ done: {row["title"]}', row
 
 
 def delete_task(i: Intent) -> tuple[str, dict | None]:
-    if not i.target_task_id or not db.get_task(i.target_task_id):
+    existing = db.get_task(i.target_task_id) if i.target_task_id else None
+    if not existing:
         return (i.note or f"which task? {_HINT}"), None
+    if existing["status"] != "pending":
+        return f'that task is already {existing["status"]}', None
     row = db.set_status(i.target_task_id, "cancelled")
     return f'🗑️ removed: {row["title"]}', row
 
@@ -64,8 +76,11 @@ def delete_task(i: Intent) -> tuple[str, dict | None]:
 def reschedule(i: Intent) -> tuple[str, dict | None]:
     if not i.target_task_id or not db.get_task(i.target_task_id):
         return (i.note or f"which task? {_HINT}"), None
-    row = db.reschedule_task(i.target_task_id, due_date=_parse_date(i.date),
-                             scheduled_start=_parse_dt(i.start), scheduled_end=_parse_dt(i.end))
+    due, start, end = _parse_date(i.date), _parse_dt(i.start), _parse_dt(i.end)
+    if due is None and start is None:
+        return _WHEN_HINT, None
+    row = db.reschedule_task(i.target_task_id, due_date=due,
+                             scheduled_start=start, scheduled_end=end)
     when = _fmt_day(row["due_date"]) or (row["scheduled_start"] and row["scheduled_start"].strftime("%H:%M"))
     return f'📅 moved: {row["title"]} → {when}', row
 
@@ -91,4 +106,9 @@ _TABLE = {
 def dispatch(i: Intent) -> tuple[str, dict | None]:
     if i.action == "unknown":
         return (i.note or f"I didn't get that — {_HINT}"), None
-    return _TABLE[i.action](i)
+    try:
+        return _TABLE[i.action](i)
+    except ValueError:
+        # a malformed LLM date/datetime string ("next tuesday") reaching
+        # date.fromisoformat / datetime.fromisoformat — reply, don't crash.
+        return _DATE_HINT, None

@@ -112,7 +112,9 @@ def parse(text: str, *, now: datetime, tz: str, client: anthropic.Anthropic | No
     client = client or _get_client()
     try:
         resp = _call(client, user_content)
-    except anthropic.APIStatusError as exc:
+    except (anthropic.APIStatusError, anthropic.APIConnectionError) as exc:
+        # APIConnectionError also covers APITimeoutError (its subclass) — a
+        # network failure after retries must land here, not as a generic crash.
         log.error("anthropic error: %s", exc)
         return Intent(action="unknown", note="I'm having trouble right now — try again in a moment.")
     for block in resp.content:
