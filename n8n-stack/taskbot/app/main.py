@@ -23,7 +23,7 @@ async def lifespan(_: FastAPI):
     log.info("taskbot up (tz=%s, calendar=%s)", settings.taskbot_tz,
              "configured" if settings.google_refresh_token else "not configured")
     # Task 3 adds the poller and Task 7 the scheduler here, both guarded by
-    # `if settings.run_workers:` so tests (TASKBOT_RUN_WORKERS=false) skip them.
+    # `if settings.taskbot_run_workers:` so tests (TASKBOT_RUN_WORKERS=false) skip them.
     try:
         yield
     finally:

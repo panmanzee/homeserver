@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     taskbot_morning_time: str = "07:30"
     taskbot_evening_time: str = "21:00"
     http_timeout: float = 35.0
-    run_workers: bool = True   # tests set TASKBOT_RUN_WORKERS=false to skip poller+scheduler
+    taskbot_run_workers: bool = True   # binds to TASKBOT_RUN_WORKERS; tests set it false to skip poller+scheduler
 
     # Google Calendar (all optional — service runs without them)
     google_client_id: str = ""

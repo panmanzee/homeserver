@@ -5,6 +5,13 @@ from fastapi.testclient import TestClient
 from app import main
 
 
+def test_taskbot_run_workers_binds_to_env():
+    # conftest sets TASKBOT_RUN_WORKERS=false; proves the guard var is wired.
+    from app.config import Settings
+
+    assert Settings().taskbot_run_workers is False
+
+
 def test_healthz_ok():
     with patch.object(main.db, "ping", return_value=True):
         client = TestClient(main.app)
