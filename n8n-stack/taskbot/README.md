@@ -92,9 +92,17 @@ cd ~/homeserver/n8n-stack
 docker compose restart taskbot
 ```
 
-Calendar sync is now live. On first boot the bot copies the `GOOGLE_*` values
-from `.env` into the `google_oauth` table. If a token refresh ever fails the bot
-DMs "reauthorize needed" and keeps working for everything except the calendar.
+Calendar sync is now live. `gcal` reads `GOOGLE_REFRESH_TOKEN`,
+`GOOGLE_CALENDAR_ID`, `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` straight from
+the environment — nothing is copied into the database. (A `google_oauth` table
+exists in the schema for a future version that will manage the token in-DB, but
+the current code does not read or write it in production.)
+
+If a token refresh ever fails, the failure is **logged, not DMed** — the bot
+keeps working for everything except the calendar. If calendar events stop
+appearing, check `docker compose logs taskbot` for a `gcal sync failed` line and
+re-run `python -m app.authorize` on a machine with a browser to mint a fresh
+`GOOGLE_REFRESH_TOKEN`.
 
 ## Message vocabulary
 
@@ -135,15 +143,17 @@ APScheduler ──▶ morning plan (07:30) · evening review (21:00) · rollover
   validated with pydantic; failures become a polite "I didn't get that".
 - **actions** — pure functions over the `taskbot` Postgres database (own DB,
   schema applied idempotently on every boot).
-- **gcal** — `google-auth` + `google-api-python-client`; every function is a
-  no-op when `GOOGLE_REFRESH_TOKEN` is unset, and calendar errors never break a
-  reply.
+- **gcal** — `google-auth` + `google-api-python-client`; credentials come
+  straight from the `GOOGLE_*` env vars. Every function is a no-op when
+  `GOOGLE_REFRESH_TOKEN` is unset, a refresh/API error is logged and swallowed
+  (never breaks a reply), and the mirror is one-way (tasks → calendar only).
 - **scheduler** — APScheduler cron jobs pinned to `TASKBOT_TZ`: morning plan,
   evening review, and a rollover 30 min after the evening review that moves
   still-pending untimed tasks to tomorrow.
 
-Every inbound and outbound message is written to `message_log` (with the parsed
-intent) for prompt tuning.
+Every inbound and outbound message is written to `message_log` for prompt
+tuning; rows older than `TASKBOT_LOG_RETENTION_DAYS` (default 30) are pruned by a
+nightly 03:30 job.
 
 ### HTTP endpoints
 
@@ -169,6 +179,7 @@ cd ~/homeserver/n8n-stack/taskbot
 .venv/bin/python -m pytest -q
 ```
 
-All externals are mocked (respx for Telegram, a fake Anthropic client, a fake
-gcal client). The DB-layer tests are skipped unless a local Postgres is
-reachable.
+All externals are mocked (monkeypatched `httpx.post` for Telegram, a fake
+Anthropic client, a fake gcal client; `respx` is in `requirements-dev.txt` and
+available for future HTTP-level tests). The DB-layer tests are skipped unless
+`TASKBOT_TEST_DB_URL` points at a scratch Postgres database.

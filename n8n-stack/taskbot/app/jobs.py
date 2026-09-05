@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import timedelta
 
 from . import clock, db, gcal, telegram
-
-log = logging.getLogger("taskbot.jobs")
+from .config import settings
 
 
 def _line(row: dict) -> str:
@@ -37,9 +35,7 @@ def morning_plan() -> str:
 
 def evening_review() -> str:
     today = clock.now_local().date()
-    tomorrow = today + timedelta(days=1)
-    todays = db.tasks_for_day(today)
-    pending = [r for r in todays if r["status"] == "pending"]
+    pending = db.tasks_for_day(today)  # already filtered to status='pending'
     if not pending:
         text = "🌙 Everything for today is done. Nice."
         telegram.send_message(text)
@@ -63,3 +59,8 @@ def rollover_unfinished() -> int:
             gcal.sync_rescheduled(row)
             moved += 1
     return moved
+
+
+def prune_message_log() -> int:
+    """Nightly: drop message_log rows past the retention window."""
+    return db.prune_message_log(settings.taskbot_log_retention_days)

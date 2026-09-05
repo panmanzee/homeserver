@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     taskbot_evening_time: str = "21:00"
     http_timeout: float = 35.0
     taskbot_run_workers: bool = True   # binds to TASKBOT_RUN_WORKERS; tests set it false to skip poller+scheduler
+    taskbot_log_retention_days: int = 30   # message_log rows older than this are pruned nightly
 
     # Google Calendar (all optional — service runs without them)
     google_client_id: str = ""

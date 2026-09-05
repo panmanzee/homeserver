@@ -59,6 +59,7 @@ async def lifespan(_: FastAPI):
         scheduler.add_job(jobs.rollover_unfinished,
                           _cron_plus(settings.taskbot_evening_time, 30),
                           id="rollover")
+        scheduler.add_job(jobs.prune_message_log, _cron("03:30"), id="prune_log")
         scheduler.start()
     try:
         yield
