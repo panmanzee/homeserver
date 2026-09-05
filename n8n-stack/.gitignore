@@ -1,5 +1,6 @@
 .env
 newsfeed-api/.venv/
+taskbot/.venv/
 __pycache__/
 *.pyc
 .pytest_cache/

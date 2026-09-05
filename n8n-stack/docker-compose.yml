@@ -54,6 +54,29 @@ services:
     depends_on:
       - postgres
 
+  taskbot:
+    build: ./taskbot
+    container_name: taskbot
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://n8n:${POSTGRES_PASSWORD:-REDACTED}@postgres:5432/taskbot
+      SERVICE_API_KEY: ${SERVICE_API_KEY:?set SERVICE_API_KEY in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-haiku-4-5}
+      TASKBOT_TZ: ${TASKBOT_TZ:-UTC}
+      TASKBOT_MORNING_TIME: ${TASKBOT_MORNING_TIME:-07:30}
+      TASKBOT_EVENING_TIME: ${TASKBOT_EVENING_TIME:-21:00}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REFRESH_TOKEN: ${GOOGLE_REFRESH_TOKEN:-}
+      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-}
+    ports:
+      - "127.0.0.1:8002:8000"
+    depends_on:
+      - postgres
+
 volumes:
   postgres_data:
   n8n_data:
