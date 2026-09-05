@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 
-from . import db
+from . import db, telegram
 from .config import settings
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("taskbot")
+
+
+async def _echo_handler(text: str, msg_id: int) -> str | None:
+    return f"(echo) {text}"
 
 
 @asynccontextmanager
@@ -24,9 +29,18 @@ async def lifespan(_: FastAPI):
              "configured" if settings.google_refresh_token else "not configured")
     # Task 3 adds the poller and Task 7 the scheduler here, both guarded by
     # `if settings.taskbot_run_workers:` so tests (TASKBOT_RUN_WORKERS=false) skip them.
+    poller = None
+    if settings.taskbot_run_workers:
+        poller = asyncio.create_task(telegram.poll_forever(_echo_handler))
     try:
         yield
     finally:
+        if poller:
+            poller.cancel()
+            try:
+                await poller
+            except asyncio.CancelledError:
+                pass
         db.pool.close()
 
 
