@@ -9,12 +9,29 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 
-from . import db, handler, telegram
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+from . import clock, db, handler, jobs, telegram
 from .config import settings
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("taskbot")
+
+
+def _cron(hhmm: str) -> CronTrigger:
+    h, m = hhmm.split(":")
+    return CronTrigger(hour=int(h), minute=int(m), timezone=clock.tz_name())
+
+
+def _cron_plus(hhmm: str, minutes: int) -> CronTrigger:
+    h, m = (int(x) for x in hhmm.split(":"))
+    total = h * 60 + m + minutes
+    if total >= 24 * 60:
+        total = 23 * 60 + 59  # personal bot, not a rocket — just cap at end of day
+    return CronTrigger(hour=(total // 60) % 24, minute=total % 60,
+                       timezone=clock.tz_name())
 
 
 @asynccontextmanager
@@ -23,11 +40,22 @@ async def lifespan(_: FastAPI):
     db.apply_schema()
     log.info("taskbot up (tz=%s, calendar=%s)", settings.taskbot_tz,
              "configured" if settings.google_refresh_token else "not configured")
-    # Task 3 adds the poller and Task 7 the scheduler here, both guarded by
-    # `if settings.taskbot_run_workers:` so tests (TASKBOT_RUN_WORKERS=false) skip them.
+    # The poller (Task 3) and scheduler (Task 7) both run only when
+    # `settings.taskbot_run_workers` is set, so tests (TASKBOT_RUN_WORKERS=false)
+    # skip them.
     poller = None
+    scheduler = None
     if settings.taskbot_run_workers:
         poller = asyncio.create_task(telegram.poll_forever(handler.handle))
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(jobs.morning_plan,
+                          _cron(settings.taskbot_morning_time), id="morning")
+        scheduler.add_job(jobs.evening_review,
+                          _cron(settings.taskbot_evening_time), id="evening")
+        scheduler.add_job(jobs.rollover_unfinished,
+                          _cron_plus(settings.taskbot_evening_time, 30),
+                          id="rollover")
+        scheduler.start()
     try:
         yield
     finally:
@@ -37,6 +65,8 @@ async def lifespan(_: FastAPI):
                 await poller
             except asyncio.CancelledError:
                 pass
+        if scheduler:
+            scheduler.shutdown(wait=False)
         db.pool.close()
 
 
@@ -55,3 +85,13 @@ AuthDep = Depends(require_api_key)
 def healthz() -> dict[str, str]:
     db.ping()
     return {"status": "ok"}
+
+
+@app.post("/jobs/morning-plan", dependencies=[AuthDep])
+def _job_morning() -> dict[str, str]:
+    return {"sent": jobs.morning_plan()}
+
+
+@app.post("/jobs/evening-review", dependencies=[AuthDep])
+def _job_evening() -> dict[str, str]:
+    return {"sent": jobs.evening_review()}
