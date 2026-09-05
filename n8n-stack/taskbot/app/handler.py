@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 
 from . import actions, clock, db, gcal, intent
 
-log = logging.getLogger("taskbot.handler")
 _warned_utc = False
 
 
@@ -34,11 +32,11 @@ def _act(parsed) -> str:
 
 async def handle(text: str, msg_id: int) -> str | None:
     global _warned_utc
+    # Log the inbound row FIRST — before parse/act can raise — so the poller's
+    # crash path never needs to (and never double-logs) this message.
+    await asyncio.to_thread(db.log_message, "in", text, tg_message_id=msg_id)
     parsed = await asyncio.to_thread(
         intent.parse, text, now=clock.now_local(), tz=clock.tz_name()
-    )
-    await asyncio.to_thread(
-        db.log_message, "in", text, tg_message_id=msg_id, intent=parsed.model_dump()
     )
     reply = await asyncio.to_thread(_act, parsed)
     if clock.is_utc() and not _warned_utc:

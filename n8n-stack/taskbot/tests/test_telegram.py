@@ -71,6 +71,30 @@ async def test_chat_gate_and_offset(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_offset_advances_even_when_send_always_fails(monkeypatch):
+    # F1: a persistent sendMessage failure must NOT wedge the poller — the offset
+    # has to advance once per update or Telegram re-serves it forever.
+    offset = {"v": 0}
+    monkeypatch.setattr(telegram.db, "get_offset", lambda: offset["v"])
+    monkeypatch.setattr(telegram.db, "set_offset", lambda v: offset.__setitem__("v", v))
+    monkeypatch.setattr(telegram.db, "log_message", lambda *a, **k: None)
+
+    def always_fails(_text):
+        raise telegram.TelegramTransient("persistent 429")
+
+    monkeypatch.setattr(telegram, "send_message", always_fails)
+
+    async def handle(text, mid):
+        return "reply that can't be delivered"
+
+    nxt = await telegram.run_once(
+        [{"update_id": 41, "message": {"message_id": 1, "chat": {"id": 648810}, "text": "hi"}}],
+        handle,
+    )
+    assert nxt == 42 and offset["v"] == 42
+
+
+@pytest.mark.asyncio
 async def test_handler_exception_becomes_polite_reply(monkeypatch):
     out = []
     monkeypatch.setattr(telegram.db, "get_offset", lambda: 0)

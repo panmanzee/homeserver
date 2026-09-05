@@ -62,7 +62,7 @@ def _split(text: str, limit: int) -> list[str]:
 
 
 @retry(retry=retry_if_exception_type(TelegramTransient),
-       stop=stop_after_attempt(4), wait=wait_exponential(min=1, max=20), reraise=True)
+       stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10), reraise=True)
 def _post_chunk(chunk: str) -> None:
     try:
         r = httpx.post(f"{_API}/sendMessage",
@@ -101,8 +101,15 @@ async def _get_updates(client: httpx.AsyncClient, offset: int) -> list[dict]:
 
 
 async def run_once(updates: list[dict], handle: Handler) -> int:
-    """Process a batch; return the next offset. Shared by the loop and tests."""
-    next_offset = db.get_offset()
+    """Process a batch; return the next offset. Shared by the loop and tests.
+
+    The offset advances once per update no matter what: a persistent sendMessage
+    failure must not wedge the poller on the same offset (which would make
+    Telegram re-serve the update and repeat its DB mutation forever). A lost
+    reply is acceptable; a stuck offset is not. The blocking DB / HTTP calls run
+    in worker threads so a slow send can't freeze the event loop (and /healthz).
+    """
+    next_offset = await asyncio.to_thread(db.get_offset)
     for upd in updates:
         next_offset = max(next_offset, upd["update_id"] + 1)
         msg = upd.get("message") or {}
@@ -117,11 +124,13 @@ async def run_once(updates: list[dict], handle: Handler) -> int:
                 reply = await handle(text, msg.get("message_id", 0))
             except Exception:
                 log.exception("handler failed for: %s", text)
-                db.log_message("in", text, tg_message_id=msg.get("message_id"))  # capture the crashed msg
                 reply = "⚠️ something went wrong handling that — try rephrasing."
             if reply:
-                send_message(reply)
-        db.set_offset(next_offset)  # advance after each update is handled (or deliberately dropped)
+                try:
+                    await asyncio.to_thread(send_message, reply)
+                except Exception:
+                    log.exception("failed to send reply; dropping it (offset still advances)")
+        await asyncio.to_thread(db.set_offset, next_offset)  # unconditional, once per update
     return next_offset
 
 
@@ -129,7 +138,7 @@ async def poll_forever(handle: Handler) -> None:
     async with httpx.AsyncClient() as client:
         while True:
             try:
-                offset = db.get_offset()
+                offset = await asyncio.to_thread(db.get_offset)
                 updates = await _get_updates(client, offset)
                 if updates:
                     await run_once(updates, handle)
