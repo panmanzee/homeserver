@@ -1,14 +1,35 @@
-"""The poller's message handler: parse -> act -> (Task 6: sync calendar) -> reply."""
+"""The poller's message handler: parse -> act -> sync calendar (Task 6) -> reply."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 
-from . import actions, clock, db, intent
+from . import actions, clock, db, gcal, intent
 
 log = logging.getLogger("taskbot.handler")
 _warned_utc = False
+
+
+def _act(parsed) -> str:
+    """Blocking: dispatch the intent, then mirror the change to Google Calendar.
+
+    Runs in a worker thread (see ``handle``) so the network-bound ``gcal.sync_*``
+    calls never stall the poll loop. Every ``gcal`` function is a no-op when
+    Google isn't configured, and ``gcal._guard`` swallows its own errors, so a
+    calendar failure can't break the reply.
+    """
+    reply, row = actions.dispatch(parsed)
+    if row:
+        if parsed.action in ("add_task", "add_event"):
+            gcal.sync_new(row)
+        elif parsed.action == "complete_task":
+            gcal.sync_completed(row)
+        elif parsed.action == "delete_task":
+            gcal.sync_deleted(row)
+        elif parsed.action == "reschedule":
+            gcal.sync_rescheduled(row)
+    return reply
 
 
 async def handle(text: str, msg_id: int) -> str | None:
@@ -19,7 +40,7 @@ async def handle(text: str, msg_id: int) -> str | None:
     await asyncio.to_thread(
         db.log_message, "in", text, tg_message_id=msg_id, intent=parsed.model_dump()
     )
-    reply, _row = await asyncio.to_thread(actions.dispatch, parsed)
+    reply = await asyncio.to_thread(_act, parsed)
     if clock.is_utc() and not _warned_utc:
         reply += "\n\n⏰ timezone is UTC — set TASKBOT_TZ in .env"
         _warned_utc = True
