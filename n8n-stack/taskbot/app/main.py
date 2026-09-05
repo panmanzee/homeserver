@@ -17,6 +17,10 @@ from .config import settings
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
+# httpx/httpcore log every request at INFO — that puts the bot token (it's in the
+# Telegram API URL path) into the container logs every ~30s. Quiet them.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 log = logging.getLogger("taskbot")
 
 
