@@ -13,9 +13,15 @@ class Settings(BaseSettings):
     service_api_key: str
     telegram_bot_token: str
     telegram_chat_id: str
-    anthropic_api_key: str
 
-    # LLM
+    # LLM — provider is pluggable (mirrors newsfeed-api). Gemini is the default:
+    # free tier covers this workload and the stack .env already has a live key.
+    llm_provider: str = "gemini"          # gemini | anthropic
+    gemini_api_key: str = ""
+    # flash-lite: a per-message chat workload wants the high free-tier request/day
+    # cap. Override with TASKBOT_GEMINI_MODEL (see docker-compose.yml).
+    gemini_model: str = "gemini-3.1-flash-lite"
+    anthropic_api_key: str = ""           # only needed when llm_provider = anthropic
     claude_model: str = "claude-haiku-4-5"
     llm_max_tokens: int = 1024
 

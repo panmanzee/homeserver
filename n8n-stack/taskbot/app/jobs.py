@@ -9,8 +9,12 @@ from .config import settings
 
 
 def _line(row: dict) -> str:
-    if row.get("scheduled_start"):
-        return f"{row['scheduled_start'].strftime('%H:%M')} {row['title']}"
+    start = row.get("scheduled_start")
+    if start:
+        # timestamptz comes back aware (usually UTC) — show the user's wall clock.
+        if start.tzinfo is not None:
+            start = start.astimezone(clock.zone())
+        return f"{start.strftime('%H:%M')} {row['title']}"
     return f"• {row['title']}"
 
 

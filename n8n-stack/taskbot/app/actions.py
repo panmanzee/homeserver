@@ -24,6 +24,13 @@ def _parse_dt(s: str | None) -> datetime | None:
     return datetime.fromisoformat(s).replace(tzinfo=clock.zone()) if s else None
 
 
+def _hhmm(dt: datetime | None) -> str:
+    """Wall-clock HH:MM in the user's zone. `scheduled_start` comes back from
+    psycopg as an aware datetime (usually UTC), so it must be converted before
+    formatting — otherwise a 18:00 Bangkok event renders as 11:00."""
+    return dt.astimezone(clock.zone()).strftime("%H:%M") if dt else ""
+
+
 def _fmt_day(d: date | None) -> str:
     if not d:
         return ""
@@ -49,8 +56,7 @@ def add_event(i: Intent) -> tuple[str, dict | None]:
     end = _parse_dt(i.end) or (start + timedelta(minutes=i.estimate_minutes or 60))
     row = db.create_task(title=i.title or "untitled", scheduled_start=start,
                          scheduled_end=end, estimate_minutes=i.estimate_minutes)
-    hm = start.strftime("%H:%M")
-    return f'✅ {row["title"]} at {hm} {_fmt_day(start.date())}', row
+    return f'✅ {row["title"]} at {_hhmm(start)} {_fmt_day(start.date())}', row
 
 
 def complete_task(i: Intent) -> tuple[str, dict | None]:
@@ -81,7 +87,7 @@ def reschedule(i: Intent) -> tuple[str, dict | None]:
         return _WHEN_HINT, None
     row = db.reschedule_task(i.target_task_id, due_date=due,
                              scheduled_start=start, scheduled_end=end)
-    when = _fmt_day(row["due_date"]) or (row["scheduled_start"] and row["scheduled_start"].strftime("%H:%M"))
+    when = _fmt_day(row["due_date"]) or _hhmm(row["scheduled_start"])
     return f'📅 moved: {row["title"]} → {when}', row
 
 
@@ -92,7 +98,7 @@ def list_day(i: Intent) -> tuple[str, None]:
         return f"nothing for {_fmt_day(day)} yet.", None
     lines = [f"📋 {_fmt_day(day)}:"]
     for r in rows:
-        t = r["scheduled_start"].strftime("%H:%M ") if r["scheduled_start"] else "• "
+        t = f"{_hhmm(r['scheduled_start'])} " if r["scheduled_start"] else "• "
         lines.append(f"{t}{r['title']}")
     return "\n".join(lines), None
 

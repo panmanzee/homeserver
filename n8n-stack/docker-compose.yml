@@ -63,6 +63,11 @@ services:
       SERVICE_API_KEY: ${SERVICE_API_KEY:?set SERVICE_API_KEY in .env}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # taskbot gets its own model knob: a per-message chat workload wants the
+      # high free-tier RPD of a flash-lite model, independent of newsfeed's GEMINI_MODEL.
+      GEMINI_MODEL: ${TASKBOT_GEMINI_MODEL:-gemini-3.1-flash-lite}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-haiku-4-5}
       TASKBOT_TZ: ${TASKBOT_TZ:-UTC}

@@ -9,8 +9,10 @@ Sibling service to `newsfeed-api/` in the `n8n-stack`.
 
 Once the stack is deployed (`docker compose up -d taskbot`), taskbot is a fully
 usable task manager **with zero setup** — it reuses the stack's
-`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `ANTHROPIC_API_KEY` and
-`SERVICE_API_KEY`. Just open Telegram and text the bot. It only ever responds to
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `SERVICE_API_KEY`, and the same LLM
+provider settings as `newsfeed-api` (`LLM_PROVIDER`, default `gemini`, with
+`GEMINI_API_KEY`; set `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` to use
+Claude instead). Just open Telegram and text the bot. It only ever responds to
 messages from `TELEGRAM_CHAT_ID` and silently ignores every other chat.
 
 The two things below are optional polish:
@@ -106,8 +108,8 @@ re-run `python -m app.authorize` on a machine with a browser to mint a fresh
 
 ## Message vocabulary
 
-You only ever type plain sentences. There are no slash commands. The bot uses
-Claude Haiku to map each message to one intent:
+You only ever type plain sentences. There are no slash commands. The bot uses an
+LLM (Gemini by default, Claude optional) to map each message to one intent:
 
 | You say | Intent | Effect |
 | --- | --- | --- |
@@ -125,7 +127,7 @@ open tasks. If nothing matches, or two match equally, the bot asks which one.
 ## How it's wired
 
 ```
-Telegram  ──getUpdates (long poll, 30s)──▶  poller  ──▶  intent parse (Claude Haiku)
+Telegram  ──getUpdates (long poll, 30s)──▶  poller  ──▶  intent parse (Gemini / Claude)
    ▲                                                          │
    └── sendMessage ◀── reply ◀── actions (tasks table) ◀──────┘
                                      │
@@ -138,9 +140,11 @@ APScheduler ──▶ morning plan (07:30) · evening review (21:00) · rollover
 - **poller** — async background task; `getUpdates(offset, timeout=30)` in a
   loop, persists the offset in `bot_state` so a restart never drops or
   reprocesses a message; drops any chat that isn't `TELEGRAM_CHAT_ID`.
-- **intent parser** — one Claude Haiku tool-use call per message, given the
-  message, current datetime/tz, and the list of open tasks. Strict JSON,
-  validated with pydantic; failures become a polite "I didn't get that".
+- **intent parser** — one structured LLM call per message (Gemini
+  `response_schema` by default, or a Claude tool-use call when
+  `LLM_PROVIDER=anthropic`), given the message, current datetime/tz, and the
+  list of open tasks. Strict JSON, validated with pydantic; any provider error
+  degrades to a polite "having trouble" reply and the poller keeps running.
 - **actions** — pure functions over the `taskbot` Postgres database (own DB,
   schema applied idempotently on every boot).
 - **gcal** — `google-auth` + `google-api-python-client`; credentials come
@@ -180,6 +184,6 @@ cd ~/homeserver/n8n-stack/taskbot
 ```
 
 All externals are mocked (monkeypatched `httpx.post` for Telegram, a fake
-Anthropic client, a fake gcal client; `respx` is in `requirements-dev.txt` and
-available for future HTTP-level tests). The DB-layer tests are skipped unless
+Gemini / Anthropic client, a fake gcal client; `respx` is in
+`requirements-dev.txt` and available for future HTTP-level tests). The DB-layer tests are skipped unless
 `TASKBOT_TEST_DB_URL` points at a scratch Postgres database.
