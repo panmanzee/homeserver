@@ -57,6 +57,21 @@ def test_bad_action_dropped_rest_kept():
     assert [a.kind for a in p.actions] == ["delete"]
 
 
+def test_bad_action_tells_user_something_was_lost():
+    p = _call({"actions": [
+        {"kind": "nonsense"},
+        {"kind": "add_task", "title": "buy milk"},
+    ]})
+    assert [a.kind for a in p.actions] == ["add_task"]
+    assert p.reply and "couldn't understand" in p.reply
+
+
+def test_non_dict_action_dropped_gracefully():
+    p = _call({"actions": ["just a string", {"kind": "list_day"}]})
+    assert [a.kind for a in p.actions] == ["list_day"]
+    assert p.reply and "couldn't understand" in p.reply
+
+
 def test_truncates_at_max_actions():
     p = _call({"actions": [{"kind": "add_task", "title": f"t{i}"} for i in range(15)]})
     assert len(p.actions) == planner.MAX_ACTIONS

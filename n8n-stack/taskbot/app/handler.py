@@ -35,12 +35,15 @@ def _sync(gcal_ops: list) -> None:
     so this can't break the reply."""
     for kind, row in gcal_ops:
         fn_name = _GCAL_DISPATCH.get(kind)
-        if fn_name:
-            getattr(gcal, fn_name)(row)
+        fn = getattr(gcal, fn_name, None) if fn_name else None
+        if fn:
+            fn(row)
 
 
 async def handle(text: str, msg_id: int) -> str | None:
     global _warned_utc
+    # Read history BEFORE logging the inbound message, so it holds prior turns
+    # only (not the message we're about to plan). Do not reorder these two.
     history = await asyncio.to_thread(db.recent_turns, 6)
     await asyncio.to_thread(db.log_message, "in", text, tg_message_id=msg_id)
     tasks = await asyncio.to_thread(db.open_tasks)

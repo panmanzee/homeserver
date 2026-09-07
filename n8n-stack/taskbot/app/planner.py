@@ -322,15 +322,23 @@ def _anthropic_raw(user_content: str, *, client: Any | None = None) -> dict[str,
 def _validate(raw: dict) -> Plan:
     raw_actions = raw.get("actions") or []
     cleaned: list[Action] = []
+    dropped = 0
     for a in raw_actions[:MAX_ACTIONS]:
+        if not isinstance(a, dict):
+            log.warning("dropped non-dict action: %r", a)
+            dropped += 1
+            continue
         a = {k: v for k, v in a.items() if v not in ("", None)}
         try:
             cleaned.append(Action.model_validate(a))
-        except ValidationError:
-            continue  # drop an unparseable action, keep the rest
+        except ValidationError as exc:
+            log.warning("dropped unparseable action: %s / %s", exc, a)
+            dropped += 1  # drop an unparseable action, keep the rest
     reply = raw.get("reply") or None
     if len(raw_actions) > MAX_ACTIONS:
         reply = ((reply + " ") if reply else "") + f"(only did the first {MAX_ACTIONS})"
+    if dropped:
+        reply = ((reply + " ") if reply else "") + "(couldn't understand one part of that)"
     return Plan(actions=cleaned, reply=reply)
 
 

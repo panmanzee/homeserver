@@ -110,4 +110,7 @@ def sync_rescheduled(row: dict) -> None:
         sync_new(row)
         return
     svc, cal = _svc()
-    svc.events().patch(calendarId=cal, eventId=row["gcal_event_id"], body=_body(row)).execute()
+    # update (full replace), not patch: patch MERGES nested objects, so pushing a
+    # {"date": …} start onto an event that still holds {"dateTime": …} leaves both
+    # keys set and Google 400s. _body(row) is already a complete event body.
+    svc.events().update(calendarId=cal, eventId=row["gcal_event_id"], body=_body(row)).execute()

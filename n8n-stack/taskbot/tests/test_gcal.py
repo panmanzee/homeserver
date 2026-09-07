@@ -16,6 +16,24 @@ def test_body_all_day_vs_timed():
     assert timed["start"]["dateTime"].startswith("2026-09-06T23:00")
 
 
+def test_sync_rescheduled_uses_update_not_patch(monkeypatch):
+    monkeypatch.setattr(gcal, "enabled", lambda: True)
+    calls = {}
+    class _Ev:
+        def update(self, **kw): calls["update"] = kw; return self
+        def patch(self, **kw): calls["patch"] = kw; return self
+        def execute(self): return {}
+    class _Svc:
+        def events(self): return _Ev()
+    monkeypatch.setattr(gcal, "_svc", lambda: (_Svc(), "cal-1"))
+    gcal.sync_rescheduled({"id": 1, "title": "book", "gcal_event_id": "evt-1",
+                           "due_date": date(2026, 9, 8), "scheduled_start": None})
+    assert "update" in calls and "patch" not in calls
+    body = calls["update"]["body"]
+    # full replacement body: only the all-day 'date' form, no stale dateTime
+    assert body["start"] == {"date": "2026-09-08"} and "dateTime" not in body["start"]
+
+
 def test_sync_new_stores_event_id(monkeypatch):
     monkeypatch.setattr(gcal, "enabled", lambda: True)
     stored = {}

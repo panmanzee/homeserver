@@ -88,11 +88,20 @@ def _delete(a: Action) -> tuple[str, dict | None]:
 
 
 def _reschedule(a: Action) -> tuple[str, dict | None]:
-    if not _target(a):
+    before = _target(a)
+    if not before:
         return (a.note or f"which task? {_HINT}"), None
     due, start, end = _parse_date(a.date), _parse_dt(a.start), _parse_dt(a.end)
     if due is None and start is None:
         return _WHEN_HINT, None
+    if start is not None and end is None:
+        # db.reschedule_task COALESCEs a None end onto the OLD end, which would
+        # leave the event zero/negative length once the start moves. Rebuild the
+        # end from the original duration (or a 60-min fallback).
+        old_s, old_e = before.get("scheduled_start"), before.get("scheduled_end")
+        dur = (old_e - old_s) if (old_s and old_e and old_e > old_s) \
+            else timedelta(minutes=a.estimate_minutes or 60)
+        end = start + dur
     row = db.reschedule_task(a.target_id, due_date=due, scheduled_start=start, scheduled_end=end)
     when = _fmt_day(row["due_date"]) or _hhmm(row["scheduled_start"])
     return f'📅 moved: {row["title"]} → {when}', row
@@ -102,6 +111,12 @@ def _convert(a: Action) -> tuple[str, dict | None]:
     row = _target(a)
     if not row:
         return (a.note or _ALL_DAY_HINT), None
+    if a.to_all_day is False:
+        # convert with to_all_day:false means "give it a time" — but the planner
+        # should have emitted a reschedule. Ask rather than null the times.
+        return (a.note or "tell me the new time — e.g. 'gym at 7pm'"), None
+    if row["status"] != "pending":
+        return f'that task is already {row["status"]}', None
     # v1 supports only timed -> all-day (to_all_day truthy or unset with a timed task)
     d = _parse_date(a.date) or (row["scheduled_start"].date() if row.get("scheduled_start")
                                 else clock.now_local().date())
@@ -113,6 +128,8 @@ def _rename(a: Action) -> tuple[str, dict | None]:
     row = _target(a)
     if not row or not a.title:
         return (a.note or f"rename which task, to what? {_HINT}"), None
+    if row["status"] != "pending":
+        return f'that task is already {row["status"]}', None
     new = db.rename_task(a.target_id, a.title)
     return f'✏️ renamed to "{new["title"]}"', new
 
@@ -150,6 +167,9 @@ def execute_plan(plan: Plan) -> tuple[list[str], list[tuple[str, dict]]]:
             continue
         fn = _TABLE.get(a.kind)
         if fn is None:
+            import logging
+            logging.getLogger("taskbot.actions").warning("unknown action kind: %s", a.kind)
+            lines.append(f"⚠️ couldn't do: {a.kind}")
             continue
         try:
             msg, row = fn(a)

@@ -145,10 +145,14 @@ def reschedule_task(task_id: int, *, due_date: date | None = None,
 
 
 def recent_turns(limit: int = 6) -> list[dict[str, Any]]:
-    """Last `limit` message_log rows, oldest-first — the planner's short memory."""
+    """Last `limit` message_log rows from the past 6 hours, oldest-first — the
+    planner's short memory. The age bound stops a days-old exchange being fed as
+    'most recent' with no timestamps against a NOW that says today."""
     with pool.connection() as conn:
         rows = conn.execute(
-            "SELECT direction, text FROM message_log ORDER BY id DESC LIMIT %s",
+            "SELECT direction, text FROM message_log "
+            "WHERE created_at > now() - interval '6 hours' "
+            "ORDER BY id DESC LIMIT %s",
             (limit,),
         ).fetchall()
     return list(reversed(rows))

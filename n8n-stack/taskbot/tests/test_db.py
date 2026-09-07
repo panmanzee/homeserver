@@ -93,6 +93,14 @@ def test_recent_turns_oldest_first_and_limited(db):
     assert [t["direction"] for t in turns] == ["in", "out", "in"]
 
 
+def test_recent_turns_excludes_rows_older_than_6h(db):
+    with db.pool.connection() as c:
+        c.execute("INSERT INTO message_log (direction, text, created_at) VALUES "
+                  "('in','stale', now() - interval '8 hours'), "
+                  "('in','fresh', now() - interval '10 minutes')")
+    assert [t["text"] for t in db.recent_turns(limit=6)] == ["fresh"]
+
+
 def test_rename_task(db):
     t = db.create_task(title="ml homwork")
     r = db.rename_task(t["id"], "ML homework")
