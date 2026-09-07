@@ -6,7 +6,6 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from . import clock, db
-from .intent import Intent
 
 _HINT = ('try e.g. "math homework today", "gym at 11pm", '
          '"done with the gym", "what\'s today"')
@@ -42,57 +41,82 @@ def _fmt_day(d: date | None) -> str:
     return d.isoformat()
 
 
-def add_task(i: Intent) -> tuple[str, dict]:
-    due = _parse_date(i.date) or clock.now_local().date()
-    row = db.create_task(title=i.title or "untitled", due_date=due,
-                         estimate_minutes=i.estimate_minutes)
+from .planner import Action, Plan
+
+_ALL_DAY_HINT = "which task should I make all-day? tell me the name"
+
+
+def _add_task(a: Action) -> tuple[str, dict | None]:
+    due = _parse_date(a.date) or clock.now_local().date()
+    row = db.create_task(title=a.title or "untitled", due_date=due,
+                         estimate_minutes=a.estimate_minutes)
     return f'✅ added "{row["title"]}" for {_fmt_day(due)}', row
 
 
-def add_event(i: Intent) -> tuple[str, dict | None]:
-    start = _parse_dt(i.start)
+def _add_event(a: Action) -> tuple[str, dict | None]:
+    start = _parse_dt(a.start)
     if start is None:
         return _WHEN_HINT, None
-    end = _parse_dt(i.end) or (start + timedelta(minutes=i.estimate_minutes or 60))
-    row = db.create_task(title=i.title or "untitled", scheduled_start=start,
-                         scheduled_end=end, estimate_minutes=i.estimate_minutes)
+    end = _parse_dt(a.end) or (start + timedelta(minutes=a.estimate_minutes or 60))
+    row = db.create_task(title=a.title or "untitled", scheduled_start=start,
+                         scheduled_end=end, estimate_minutes=a.estimate_minutes)
     return f'✅ {row["title"]} at {_hhmm(start)} {_fmt_day(start.date())}', row
 
 
-def complete_task(i: Intent) -> tuple[str, dict | None]:
-    existing = db.get_task(i.target_task_id) if i.target_task_id else None
-    if not existing:
-        return (i.note or f"which task? {_HINT}"), None
-    if existing["status"] != "pending":
-        return f'that task is already {existing["status"]}', None
-    row = db.set_status(i.target_task_id, "done")
-    return f'✔️ done: {row["title"]}', row
+def _target(a: Action) -> dict | None:
+    return db.get_task(a.target_id) if a.target_id else None
 
 
-def delete_task(i: Intent) -> tuple[str, dict | None]:
-    existing = db.get_task(i.target_task_id) if i.target_task_id else None
-    if not existing:
-        return (i.note or f"which task? {_HINT}"), None
-    if existing["status"] != "pending":
-        return f'that task is already {existing["status"]}', None
-    row = db.set_status(i.target_task_id, "cancelled")
-    return f'🗑️ removed: {row["title"]}', row
+def _complete(a: Action) -> tuple[str, dict | None]:
+    row = _target(a)
+    if not row:
+        return (a.note or f"which task? {_HINT}"), None
+    if row["status"] != "pending":
+        return f'that task is already {row["status"]}', None
+    return f'✔️ done: {row["title"]}', db.set_status(a.target_id, "done")
 
 
-def reschedule(i: Intent) -> tuple[str, dict | None]:
-    if not i.target_task_id or not db.get_task(i.target_task_id):
-        return (i.note or f"which task? {_HINT}"), None
-    due, start, end = _parse_date(i.date), _parse_dt(i.start), _parse_dt(i.end)
+def _delete(a: Action) -> tuple[str, dict | None]:
+    row = _target(a)
+    if not row:
+        return (a.note or f"which task? {_HINT}"), None
+    if row["status"] != "pending":
+        return f'that task is already {row["status"]}', None
+    return f'🗑️ removed: {row["title"]}', db.set_status(a.target_id, "cancelled")
+
+
+def _reschedule(a: Action) -> tuple[str, dict | None]:
+    if not _target(a):
+        return (a.note or f"which task? {_HINT}"), None
+    due, start, end = _parse_date(a.date), _parse_dt(a.start), _parse_dt(a.end)
     if due is None and start is None:
         return _WHEN_HINT, None
-    row = db.reschedule_task(i.target_task_id, due_date=due,
-                             scheduled_start=start, scheduled_end=end)
+    row = db.reschedule_task(a.target_id, due_date=due, scheduled_start=start, scheduled_end=end)
     when = _fmt_day(row["due_date"]) or _hhmm(row["scheduled_start"])
     return f'📅 moved: {row["title"]} → {when}', row
 
 
-def list_day(i: Intent) -> tuple[str, None]:
-    day = _parse_date(i.date) or clock.now_local().date()
+def _convert(a: Action) -> tuple[str, dict | None]:
+    row = _target(a)
+    if not row:
+        return (a.note or _ALL_DAY_HINT), None
+    # v1 supports only timed -> all-day (to_all_day truthy or unset with a timed task)
+    d = _parse_date(a.date) or (row["scheduled_start"].date() if row.get("scheduled_start")
+                                else clock.now_local().date())
+    new = db.set_task_timing(a.target_id, due_date=d, scheduled_start=None, scheduled_end=None)
+    return f'🔁 {new["title"]} is now an all-day task for {_fmt_day(d)}', new
+
+
+def _rename(a: Action) -> tuple[str, dict | None]:
+    row = _target(a)
+    if not row or not a.title:
+        return (a.note or f"rename which task, to what? {_HINT}"), None
+    new = db.rename_task(a.target_id, a.title)
+    return f'✏️ renamed to "{new["title"]}"', new
+
+
+def _list_day(a: Action) -> tuple[str, None]:
+    day = _parse_date(a.date) or clock.now_local().date()
     rows = db.tasks_for_day(day)
     if not rows:
         return f"nothing for {_fmt_day(day)} yet.", None
@@ -104,17 +128,40 @@ def list_day(i: Intent) -> tuple[str, None]:
 
 
 _TABLE = {
-    "add_task": add_task, "add_event": add_event, "complete_task": complete_task,
-    "delete_task": delete_task, "reschedule": reschedule, "list_day": list_day,
+    "add_task": _add_task, "add_event": _add_event, "complete": _complete,
+    "delete": _delete, "reschedule": _reschedule, "convert": _convert,
+    "rename": _rename, "list_day": _list_day,
 }
+# kinds whose resulting row must be mirrored to Google Calendar
+_GCAL_KINDS = {"add_task", "add_event", "complete", "delete", "reschedule", "convert", "rename"}
 
 
-def dispatch(i: Intent) -> tuple[str, dict | None]:
-    if i.action == "unknown":
-        return (i.note or f"I didn't get that — {_HINT}"), None
-    try:
-        return _TABLE[i.action](i)
-    except ValueError:
-        # a malformed LLM date/datetime string ("next tuesday") reaching
-        # date.fromisoformat / datetime.fromisoformat — reply, don't crash.
-        return _DATE_HINT, None
+def execute_plan(plan: Plan) -> tuple[list[str], list[tuple[str, dict]]]:
+    lines: list[str] = []
+    gcal_ops: list[tuple[str, dict]] = []
+    if plan.reply:
+        lines.append(plan.reply)
+    for a in plan.actions:
+        if a.kind == "reply":
+            if a.note:
+                lines.append(a.note)
+            continue
+        fn = _TABLE.get(a.kind)
+        if fn is None:
+            continue
+        try:
+            msg, row = fn(a)
+        except ValueError:
+            lines.append(_DATE_HINT)
+            continue
+        except Exception:  # noqa: BLE001 - one bad action must not sink the plan
+            import logging
+            logging.getLogger("taskbot.actions").exception("action failed: %s", a.kind)
+            lines.append(f"⚠️ couldn't do: {a.kind}")
+            continue
+        lines.append(msg)
+        if row and a.kind in _GCAL_KINDS:
+            gcal_ops.append((a.kind, row))
+    if not lines:
+        lines.append(f"I didn't get that — {_HINT}")
+    return lines, gcal_ops
