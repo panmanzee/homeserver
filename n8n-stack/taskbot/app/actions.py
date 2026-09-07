@@ -1,11 +1,16 @@
-"""Apply an Intent to the tasks table. Returns the reply string. No calendar here
-(Task 6 wraps these); no Telegram here (handler sends)."""
+"""Apply a Plan's ordered actions to the tasks table.
+
+``execute_plan`` runs each action in order and returns ``(reply_lines,
+gcal_ops)`` — the human-readable lines to send back, plus the ``(kind, row)``
+pairs the handler mirrors to Google Calendar. No calendar or Telegram I/O here.
+"""
 
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
 from . import clock, db
+from .planner import Action, Plan
 
 _HINT = ('try e.g. "math homework today", "gym at 11pm", '
          '"done with the gym", "what\'s today"')
@@ -39,9 +44,6 @@ def _fmt_day(d: date | None) -> str:
     if d == today + timedelta(days=1):
         return "tomorrow"
     return d.isoformat()
-
-
-from .planner import Action, Plan
 
 _ALL_DAY_HINT = "which task should I make all-day? tell me the name"
 

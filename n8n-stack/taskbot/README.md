@@ -109,9 +109,10 @@ re-run `python -m app.authorize` on a machine with a browser to mint a fresh
 ## Message vocabulary
 
 You only ever type plain sentences. There are no slash commands. The bot uses an
-LLM (Gemini by default, Claude optional) to map each message to one intent:
+LLM (Gemini by default, Claude optional) to map each message to an ordered list
+of these actions:
 
-| You say | Intent | Effect |
+| You say | Action | Effect |
 | --- | --- | --- |
 | `math homework today` / `finish the report` | add task | untimed task on a day (default: today); all-day calendar chip |
 | `gym at 11pm` / `call mom tomorrow 14:30` | add event | timed task + timed calendar event (default 60 min) |
@@ -119,15 +120,21 @@ LLM (Gemini by default, Claude optional) to map each message to one intent:
 | `delete the math homework` / `cancel the call` | delete | cancels the task; calendar event removed |
 | `move gym to 9pm` / `reschedule the report to friday` | reschedule | updates the slot; calendar event patched |
 | `what's today` / `show my day` / `what do i have tomorrow` | list day | replies with that day's tasks and timed items |
-| anything unclear | unknown | replies with a one-line example; no state change |
+| `make the gym all-day` / `rename "call mom" to "call mom about tickets"` | convert / rename | flips a timed event to an all-day task, or changes a task's wording; calendar entry follows |
+| anything unclear | (a question) | replies asking which task / what you meant; no state change |
 
-For complete / delete / reschedule the parser matches your words against your
-open tasks. If nothing matches, or two match equally, the bot asks which one.
+You can put several things in one message (`watch a video all day, gym at 6pm,
+buy milk`) and correct the bot in your next message (`no, make the gym 7pm`) —
+it remembers the last few turns and edits what it just did.
+
+For complete / delete / reschedule / convert / rename the model matches your
+words against your open tasks. If nothing matches, or two match equally, the bot
+asks which one.
 
 ## How it's wired
 
 ```
-Telegram  ──getUpdates (long poll, 30s)──▶  poller  ──▶  intent parse (Gemini / Claude)
+Telegram  ──getUpdates (long poll, 30s)──▶  poller  ──▶  plan (Gemini / Claude)
    ▲                                                          │
    └── sendMessage ◀── reply ◀── actions (tasks table) ◀──────┘
                                      │
@@ -140,13 +147,16 @@ APScheduler ──▶ morning plan (07:30) · evening review (21:00) · rollover
 - **poller** — async background task; `getUpdates(offset, timeout=30)` in a
   loop, persists the offset in `bot_state` so a restart never drops or
   reprocesses a message; drops any chat that isn't `TELEGRAM_CHAT_ID`.
-- **intent parser** — one structured LLM call per message (Gemini
-  `response_schema` by default, or a Claude tool-use call when
-  `LLM_PROVIDER=anthropic`), given the message, current datetime/tz, and the
-  list of open tasks. Strict JSON, validated with pydantic; any provider error
-  degrades to a polite "having trouble" reply and the poller keeps running.
+- **planner** — one structured LLM call per message (Gemini `response_schema` by
+  default, or a Claude tool-use call when `LLM_PROVIDER=anthropic`): message +
+  recent turns + open tasks → an ordered list of actions. Strict JSON, validated
+  with pydantic; any provider error degrades to a polite "having trouble" reply
+  and the poller keeps running.
 - **actions** — pure functions over the `taskbot` Postgres database (own DB,
-  schema applied idempotently on every boot).
+  schema applied idempotently on every boot); `execute_plan` runs the planned
+  actions in order — `add_task` / `add_event` / `complete` / `delete` /
+  `reschedule` / `convert` (timed → all-day) / `rename` / `list_day` — and
+  returns a reply line per action plus the rows to mirror to the calendar.
 - **gcal** — `google-auth` + `google-api-python-client`; credentials come
   straight from the `GOOGLE_*` env vars. Every function is a no-op when
   `GOOGLE_REFRESH_TOKEN` is unset, a refresh/API error is logged and swallowed
