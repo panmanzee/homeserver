@@ -144,6 +144,37 @@ def reschedule_task(task_id: int, *, due_date: date | None = None,
         ).fetchone()
 
 
+def recent_turns(limit: int = 6) -> list[dict[str, Any]]:
+    """Last `limit` message_log rows, oldest-first — the planner's short memory."""
+    with pool.connection() as conn:
+        rows = conn.execute(
+            "SELECT direction, text FROM message_log ORDER BY id DESC LIMIT %s",
+            (limit,),
+        ).fetchall()
+    return list(reversed(rows))
+
+
+def rename_task(task_id: int, title: str) -> dict[str, Any] | None:
+    with pool.connection() as conn:
+        return conn.execute(
+            "UPDATE tasks SET title = %s, updated_at = now() WHERE id = %s RETURNING *",
+            (title, task_id),
+        ).fetchone()
+
+
+def set_task_timing(task_id: int, *, due_date: date | None = None,
+                    scheduled_start: datetime | None = None,
+                    scheduled_end: datetime | None = None) -> dict[str, Any] | None:
+    """Set due_date / scheduled_start / scheduled_end to EXACTLY these values
+    (no COALESCE) — used to convert a timed event to an all-day task and back."""
+    with pool.connection() as conn:
+        return conn.execute(
+            "UPDATE tasks SET due_date = %s, scheduled_start = %s, "
+            "scheduled_end = %s, updated_at = now() WHERE id = %s RETURNING *",
+            (due_date, scheduled_start, scheduled_end, task_id),
+        ).fetchone()
+
+
 def set_gcal_event_id(task_id: int, event_id: str | None) -> None:
     with pool.connection() as conn:
         conn.execute(
