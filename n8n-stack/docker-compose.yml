@@ -131,6 +131,27 @@ services:
     depends_on:
       - dockerproxy
 
+  # RAG study Q&A over your own PDFs/notes. Corpus is mounted read-only;
+  # chunks + embeddings live in the `rag` Postgres database. Bound to
+  # localhost; reached from the tailnet via `tailscale serve --https=8444`.
+  rag-api:
+    build: ./rag-api
+    container_name: rag-api
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://n8n:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/rag
+      SERVICE_API_KEY: ${SERVICE_API_KEY:?set SERVICE_API_KEY in .env}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      RAG_GEN_MODEL: ${RAG_GEN_MODEL:-gemini-3.1-flash-lite}
+      RAG_EMBED_MODEL: ${RAG_EMBED_MODEL:-gemini-embedding-001}
+      RAG_MAX_QUESTIONS_PER_DAY: ${RAG_MAX_QUESTIONS_PER_DAY:-200}
+    volumes:
+      - ./rag-api/corpus:/app/corpus:ro
+    ports:
+      - "127.0.0.1:8005:8000"
+    depends_on:
+      - postgres
+
 volumes:
   postgres_data:
   n8n_data:
