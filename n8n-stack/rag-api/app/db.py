@@ -87,4 +87,43 @@ def stats() -> dict[str, Any]:
             "questions_today": u["n"] if u else 0}
 
 
+def document_hashes() -> dict[str, str]:
+    with pool.connection() as conn:
+        return {r["filename"]: r["sha256"]
+                for r in conn.execute("SELECT filename, sha256 FROM documents").fetchall()}
+
+
+def upsert_document(filename: str, sha256: str, pages: int,
+                    chunk_rows: list[tuple[int, int, str, list[float]]]) -> int:
+    with pool.connection() as conn, conn.transaction():
+        conn.execute("DELETE FROM documents WHERE filename = %s", (filename,))
+        doc = conn.execute(
+            "INSERT INTO documents (filename, sha256, pages, chunk_count) "
+            "VALUES (%s, %s, %s, %s) RETURNING id",
+            (filename, sha256, pages, len(chunk_rows)),
+        ).fetchone()
+        did = doc["id"]
+        conn.cursor().executemany(
+            "INSERT INTO chunks (document_id, page, ord, text, embedding) "
+            "VALUES (%s, %s, %s, %s, %s::vector)",
+            [(did, page, ordn, text, str(emb)) for (page, ordn, text, emb) in chunk_rows],
+        )
+    return did
+
+
+def bump_usage() -> int:
+    with pool.connection() as conn:
+        row = conn.execute(
+            "INSERT INTO usage (day, n) VALUES (current_date, 1) "
+            "ON CONFLICT (day) DO UPDATE SET n = usage.n + 1 RETURNING n"
+        ).fetchone()
+    return row["n"]
+
+
+def questions_today() -> int:
+    with pool.connection() as conn:
+        row = conn.execute("SELECT n FROM usage WHERE day = current_date").fetchone()
+    return row["n"] if row else 0
+
+
 atexit.register(pool.close)
