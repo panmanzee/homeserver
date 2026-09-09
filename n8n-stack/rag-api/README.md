@@ -101,6 +101,34 @@ takes effect on `docker compose up -d rag-api` — **no rebuild, no re-ingest**.
 Changing `RAG_EMBED_MODEL` or `RAG_EMBED_DIMS` requires a full re-ingest so
 every chunk is re-embedded consistently.
 
+## Running the tests
+
+```bash
+cd ~/homeserver/n8n-stack/rag-api
+python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest -q
+```
+
+That runs the pure-logic suite (chunking, RRF, embed batching/retry, the answer
+prompt). **14 of the 34 tests are DB-mode** — retrieval, ingest, and the HTTP
+API against a real `pgvector` database — and are skipped unless
+`RAG_TEST_DB_URL` points at a scratch database:
+
+```bash
+docker compose -f ../docker-compose.yml exec -T postgres \
+  psql -U n8n -d postgres -c "DROP DATABASE IF EXISTS rag_test;" -c "CREATE DATABASE rag_test;"
+
+RAG_TEST_DB_URL="postgresql://n8n:$(grep ^POSTGRES_PASSWORD= ../.env | cut -d= -f2-)@127.0.0.1:5432/rag_test" \
+  .venv/bin/python -m pytest -q
+
+docker compose -f ../docker-compose.yml exec -T postgres \
+  psql -U n8n -d postgres -c "DROP DATABASE IF EXISTS rag_test;"
+```
+
+The scratch DB gets `schema.sql` applied and is truncated per-test; it is
+independent of the live `rag` database. (If pytest reports a "blocking IO"
+error, append `| cat`.)
+
 ## Backup / restore
 
 The `rag` database is included in the nightly `pg_dumpall` from

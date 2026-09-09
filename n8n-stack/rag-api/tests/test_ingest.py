@@ -58,6 +58,35 @@ def test_changed_file_replaces_chunks(db, tmp_path):
     assert docs == 1 and now != first
 
 
+def test_short_vector_list_fails_without_writing_a_row(db, tmp_path):
+    import importlib
+    from app import ingest as ing
+    importlib.reload(ing)
+    f = tmp_path / "big.txt"
+    f.write_text("boundary paragraph.\n\n" + "detail " * 600)
+
+    def short_embed(texts):
+        return _fake_embed(texts)[:-1]  # one fewer vector than chunks
+
+    r = ing.ingest_path(tmp_path, embed_fn=short_embed)
+    assert r.ingested == [] and any(x[0] == "big.txt" for x in r.failed)
+    with db.pool.connection() as c:
+        assert c.execute("SELECT count(*) n FROM documents").fetchone()["n"] == 0
+    # hash not recorded -> a later correct run still re-ingests
+    r2 = ing.ingest_path(tmp_path, embed_fn=_fake_embed)
+    assert r2.ingested == ["big.txt"]
+
+
+def test_only_path_outside_corpus_is_rejected(db, tmp_path):
+    import importlib
+    from app import ingest as ing
+    importlib.reload(ing)
+    (tmp_path / "ok.txt").write_text("real content " * 50)
+    r = ing.ingest_path(tmp_path, only=["ok.txt", "../escape.txt"], embed_fn=_fake_embed)
+    assert "ok.txt" in r.ingested
+    assert any(x[0] == "../escape.txt" and "outside corpus" in x[1] for x in r.failed)
+
+
 def test_bad_file_reported_not_fatal(db, tmp_path):
     import importlib
     from app import ingest as ing

@@ -13,12 +13,19 @@ log = logging.getLogger("rag.answer")
 _client: Any | None = None
 
 TROUBLE = "I'm having trouble reaching the model right now — try again in a moment."
+NOT_COVERED = "The material doesn't cover that."
 
-_SYSTEM = """You answer questions strictly from the provided passages of the \
+
+class AnswerError(RuntimeError):
+    """The answer could not be generated (e.g. no API key)."""
+
+
+_SYSTEM = f"""You answer questions strictly from the provided passages of the \
 user's own study material. Rules:
 - Use ONLY the passages. Do not add outside knowledge.
 - Cite every claim inline as [<filename> p.<page>], matching the passage used.
-- If the passages do not contain the answer, say exactly that — do not guess.
+- If the passages do not contain the answer, reply with exactly \
+"{NOT_COVERED}" and nothing else — do not guess.
 - Be concise: a short paragraph or a few bullets."""
 
 
@@ -38,8 +45,13 @@ class Answer:
 def _get_client() -> Any:
     global _client
     if _client is None:
+        if not settings.gemini_api_key:
+            raise AnswerError("GEMINI_API_KEY is not set")
         from google import genai
-        _client = genai.Client(api_key=settings.gemini_api_key)
+        _client = genai.Client(
+            api_key=settings.gemini_api_key,
+            http_options={"timeout": int(settings.http_timeout * 1000)},
+        )
     return _client
 
 
@@ -81,10 +93,14 @@ def answer(question: str, chunks: list[RetrievedChunk], *,
         f"[{i}] ({c.filename} p.{c.page})\n{c.text}" for i, c in enumerate(chunks, 1)
     )
     prompt = f"PASSAGES:\n{body}\n\nQUESTION: {question}"
-    client = client or _get_client()
     try:
+        client = client or _get_client()
         text = _generate(client, prompt)
     except Exception as exc:  # noqa: BLE001
         log.error("generation failed: %s", exc)
         return Answer(TROUBLE, [])
-    return Answer(text or TROUBLE, _sources(chunks))
+    if not text:
+        return Answer(TROUBLE, [])
+    if text.strip().lower().startswith(NOT_COVERED.rstrip(".").lower()):
+        return Answer(text, [])
+    return Answer(text, _sources(chunks))

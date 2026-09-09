@@ -21,7 +21,10 @@ def _get_client() -> Any:
         if not settings.gemini_api_key:
             raise EmbedError("GEMINI_API_KEY is not set")
         from google import genai
-        _client = genai.Client(api_key=settings.gemini_api_key)
+        _client = genai.Client(
+            api_key=settings.gemini_api_key,
+            http_options={"timeout": int(settings.http_timeout * 1000)},
+        )
     return _client
 
 

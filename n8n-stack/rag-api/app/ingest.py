@@ -34,8 +34,17 @@ def ingest_path(root: str | pathlib.Path, *, only: list[str] | None = None,
     root = pathlib.Path(root)
     report = IngestReport()
     known = db.document_hashes()
-    files = ([root / f for f in only] if only
-             else sorted(p for p in root.rglob("*") if p.suffix.lower() in _EXTS))
+    if only:
+        root_res = root.resolve()
+        files = []
+        for f in only:
+            p = (root / f).resolve()
+            if not p.is_relative_to(root_res):
+                report.failed.append((f, "path outside corpus"))
+                continue
+            files.append(p)
+    else:
+        files = sorted(p for p in root.rglob("*") if p.suffix.lower() in _EXTS)
     for path in files:
         name = path.name
         try:
@@ -49,7 +58,8 @@ def ingest_path(root: str | pathlib.Path, *, only: list[str] | None = None,
                 report.failed.append((name, "no extractable text (scanned PDF?)"))
                 continue
             vectors = embed_fn([c.text for c in chunks])
-            rows = [(c.page, c.ord, c.text, v) for c, v in zip(chunks, vectors)]
+            rows = [(c.page, c.ord, c.text, v)
+                    for c, v in zip(chunks, vectors, strict=True)]
             db.upsert_document(name, digest, len(pages), rows)
             report.ingested.append(name)
             report.chunks_added += len(rows)

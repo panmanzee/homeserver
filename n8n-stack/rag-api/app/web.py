@@ -35,14 +35,26 @@ go.onclick = async () => {
   if(!q) return;
   go.disabled = true;
   document.getElementById('answer').textContent = 'thinking…';
-  document.getElementById('sources').innerHTML = '';
+  document.getElementById('sources').textContent = '';
   try {
     const r = await fetch('/ask', {method:'POST', headers:{'content-type':'application/json'},
                                    body: JSON.stringify({question:q})});
+    if (!r.ok) {
+      document.getElementById('answer').textContent = 'request failed (' + r.status + ')';
+      return;
+    }
     const d = await r.json();
     document.getElementById('answer').textContent = d.answer;
-    document.getElementById('sources').innerHTML =
-      (d.sources||[]).map(s => `<li><code>${s.filename} p.${s.page}</code> — ${s.snippet}</li>`).join('');
+    const ul = document.getElementById('sources');
+    ul.textContent = '';
+    for (const s of (d.sources||[])) {
+      const li = document.createElement('li');
+      const code = document.createElement('code');
+      code.textContent = s.filename + ' p.' + s.page;
+      li.appendChild(code);
+      li.appendChild(document.createTextNode(' — ' + s.snippet));
+      ul.appendChild(li);
+    }
   } catch(e) {
     document.getElementById('answer').textContent = 'request failed: ' + e;
   } finally { go.disabled = false; stats(); }

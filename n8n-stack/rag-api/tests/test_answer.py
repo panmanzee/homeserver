@@ -49,3 +49,15 @@ def test_model_error_is_graceful(monkeypatch):
     monkeypatch.setattr("tenacity.nap.time.sleep", lambda *_: None)
     a = answer.answer("q", CHUNKS, client=_FakeGen(boom=True))
     assert a.text == answer.TROUBLE and a.sources == []
+
+
+def test_missing_api_key_is_graceful(monkeypatch):
+    monkeypatch.setattr(answer, "_client", None)
+    monkeypatch.setattr(answer.settings, "gemini_api_key", "")
+    a = answer.answer("q", CHUNKS)  # no injected client -> _get_client() runs
+    assert a.text == answer.TROUBLE and a.sources == []
+
+
+def test_not_covered_answer_drops_sources():
+    a = answer.answer("q", CHUNKS, client=_FakeGen(text=answer.NOT_COVERED))
+    assert a.sources == [] and "cover" in a.text.lower()

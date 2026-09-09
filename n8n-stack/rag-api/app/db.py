@@ -7,7 +7,6 @@ import pathlib
 from typing import Any
 
 import psycopg
-from pgvector.psycopg import register_vector
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
@@ -15,17 +14,15 @@ from .config import settings
 
 _SCHEMA = (pathlib.Path(__file__).parent.parent / "schema.sql").read_text()
 
-
-def _configure(conn: psycopg.Connection) -> None:
-    register_vector(conn)
-
+# Vectors cross the wire as plain Python lists cast with `%s::vector` in the SQL
+# (see `vector_search` and `upsert_document`) — no psycopg type registration or
+# `configure` hook is needed.
 
 pool = ConnectionPool(
     settings.database_url,
     min_size=0,
     max_size=5,
     open=True,
-    configure=_configure,
     kwargs={"row_factory": dict_row, "connect_timeout": 10},
     timeout=15,
 )
@@ -38,8 +35,8 @@ def ping() -> bool:
 
 
 def apply_schema() -> None:
-    # `vector` must exist before `register_vector` runs on pooled connections,
-    # so apply the schema on a raw connection first.
+    # Applied on a raw connection so the `vector` extension exists before any
+    # pooled connection runs a `::vector` cast.
     with psycopg.connect(settings.database_url, connect_timeout=10) as conn:
         conn.execute(_SCHEMA)
         conn.commit()
@@ -106,7 +103,7 @@ def upsert_document(filename: str, sha256: str, pages: int,
         conn.cursor().executemany(
             "INSERT INTO chunks (document_id, page, ord, text, embedding) "
             "VALUES (%s, %s, %s, %s, %s::vector)",
-            [(did, page, ordn, text, str(emb)) for (page, ordn, text, emb) in chunk_rows],
+            [(did, page, ordn, text, emb) for (page, ordn, text, emb) in chunk_rows],
         )
     return did
 

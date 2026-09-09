@@ -4,9 +4,11 @@
 
 **A self-hosted automation stack on a 2013 mini PC.**
 
-Two production services on one Intel i5-4570T box — an AI news-digest pipeline
-and a conversational Telegram task manager — orchestrated by n8n, backed by a
-single Postgres, shipped with Docker Compose, administered entirely over SSH.
+Three application services on one Intel i5-4570T box — an AI news-digest
+pipeline, a conversational Telegram task manager, and a RAG study-Q&A service —
+plus a Tailscale-only dashboard and password vault, orchestrated by n8n, backed
+by a single Postgres (with `pgvector`), shipped with Docker Compose,
+administered entirely over SSH.
 
 ![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
@@ -59,12 +61,20 @@ flowchart TB
       GC["Google Calendar"]
     end
 
+    subgraph net[" Tailnet only (tailscale serve) "]
+      direction LR
+      TS(["your devices"])
+    end
+
     subgraph box[" pan-homeserver · Docker Compose "]
       direction TB
       N8N["n8n<br/>scheduler / orchestrator"]
       NF["newsfeed-api<br/>FastAPI"]
       TB["taskbot<br/>FastAPI + long-poll worker"]
-      PG[("PostgreSQL 16<br/>newsfeed · taskbot · n8n")]
+      RAG["rag-api<br/>FastAPI · hybrid retrieval"]
+      HP["homepage<br/>dashboard (+ dockerproxy)"]
+      VW["vaultwarden<br/>password manager"]
+      PG[("PostgreSQL 16 · pgvector<br/>newsfeed · taskbot · n8n · rag")]
     end
 
     RSS --> NF
@@ -77,6 +87,11 @@ flowchart TB
     TB <--> GEM
     TB <--> PG
     TB --> GC
+    RAG <--> GEM
+    RAG --> PG
+    TS -. ":8444" .-> RAG
+    TS -. ":8443" .-> HP
+    TS -. "HTTPS" .-> VW
 ```
 
 ---
@@ -143,13 +158,45 @@ sequenceDiagram
 
 ---
 
+## 🔎 rag-api — study Q&A over your own PDFs
+
+Ask plain-language questions about your own study material (CCNA guides, notes)
+and get a short answer that cites the passages it used — drawn only from the
+retrieved chunks, never the model's general knowledge. If the material doesn't
+cover something, the answer says so and returns no sources. A single
+self-contained HTML page at `/`, reachable from the tailnet at `:8444`.
+
+```mermaid
+flowchart LR
+    F["corpus/<br/>PDF · md · txt"] -->|"extract + chunk"| C["~900-char chunks<br/>(page-tagged)"]
+    C -->|"Gemini embeddings"| V[("chunks<br/>pgvector + tsvector")]
+    Q["question"] --> KW["full-text search"]
+    Q --> AN["pgvector cosine ANN"]
+    V --- KW
+    V --- AN
+    KW --> RRF{{"Reciprocal Rank Fusion"}}
+    AN --> RRF
+    RRF -->|"top-k passages"| GEN["gemini-3.1-flash-lite<br/>strict cite-or-refuse prompt"]
+    GEN --> A["cited answer + sources[]"]
+```
+
+Ingestion is idempotent (SHA-256 hash-skip) and isolates per-file failures.
+Drop files in `corpus/` (bind-mounted read-only, gitignored) then
+`curl -XPOST .../ingest -H "X-API-Key: $KEY" -d '{}'`.
+
+📄 Full docs: **[`n8n-stack/rag-api/README.md`](n8n-stack/rag-api/README.md)**
+
+---
+
 ## 🧰 Tech stack
 
 | Layer | Choice |
 |---|---|
 | Runtime | Python 3.12 · FastAPI · Uvicorn |
-| Data | PostgreSQL 16 · `psycopg` 3 + connection pool · schema applied on boot |
-| LLM | Google Gemini (default) / Anthropic Claude (optional) — structured output & tool-use |
+| Data | PostgreSQL 16 + `pgvector` · `psycopg` 3 + connection pool · schema applied on boot |
+| Retrieval | Hybrid search — `pgvector` cosine ANN + Postgres full-text (`tsvector`) fused with Reciprocal Rank Fusion (`rag-api`) |
+| Documents | PyMuPDF (PDF text + page numbers) · character-window chunker with overlap |
+| LLM | Google Gemini (default) / Anthropic Claude (optional) — structured output & tool-use; `gemini-embedding-001` for RAG embeddings |
 | Integrations | Telegram Bot API · Google Calendar API · Twelve Data |
 | Scheduling | n8n cron workflows (cross-service) · APScheduler (in-process jobs) |
 | Delivery | Docker Compose · multi-stage `python:3.12-slim` images |
@@ -162,10 +209,11 @@ sequenceDiagram
 ```
 .
 ├── n8n-stack/
-│   ├── docker-compose.yml          # postgres · n8n · newsfeed-api · taskbot
+│   ├── docker-compose.yml          # postgres · n8n · newsfeed-api · taskbot · vaultwarden · homepage · rag-api
 │   ├── .env.example                # every knob, documented
 │   ├── newsfeed-api/               # FastAPI: RSS · LLM enrichment · prices · Telegram
 │   ├── taskbot/                    # FastAPI + long-poll worker: tasks · calendar
+│   ├── rag-api/                    # FastAPI: PDF/notes ingest · hybrid retrieval · cited answers
 │   └── n8n/workflows/              # exported n8n cron workflows
 └── docs/
     ├── portfolio-roadmap.md
@@ -179,7 +227,7 @@ sequenceDiagram
 ```bash
 cd n8n-stack
 cp .env.example .env          # fill in POSTGRES_PASSWORD, SERVICE_API_KEY, GEMINI_API_KEY, TELEGRAM_*
-docker compose up -d          # postgres · n8n · newsfeed-api · taskbot
+docker compose up -d          # postgres · n8n · newsfeed-api · taskbot · vaultwarden · homepage · rag-api
 ```
 
 Each service creates its own database and applies its own schema on first boot.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException
@@ -82,7 +83,7 @@ def ask(body: AskIn) -> dict:
 
 @app.post("/ingest")
 def do_ingest(body: IngestIn, x_api_key: str | None = Header(default=None)) -> dict:
-    if x_api_key != settings.service_api_key:
+    if not secrets.compare_digest(x_api_key or "", settings.service_api_key):
         raise HTTPException(status_code=401, detail="bad or missing X-API-Key")
     report = ingest.ingest_path(settings.rag_corpus_dir, only=body.files)
     return {"ingested": report.ingested, "skipped": report.skipped,
