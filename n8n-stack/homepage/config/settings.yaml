@@ -1,0 +1,17 @@
+title: pan-homeserver
+headerStyle: clean
+theme: dark
+color: slate
+target: _blank
+
+layout:
+  Apps:
+    style: row
+    columns: 4
+  Infrastructure:
+    style: row
+    columns: 4
+
+quicklaunch:
+  searchDescriptions: true
+  hideInternetSearch: false

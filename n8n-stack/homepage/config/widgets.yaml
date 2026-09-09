@@ -1,0 +1,18 @@
+- resources:
+    label: mini-pc
+    cpu: true
+    memory: true
+    disk: /host/root
+    uptime: true
+
+- search:
+    provider: duckduckgo
+    target: _blank
+
+- datetime:
+    text_size: xl
+    locale: en-GB
+    format:
+      timeStyle: short
+      dateStyle: medium
+      hourCycle: h23

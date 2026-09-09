@@ -1,0 +1,43 @@
+- Apps:
+    - TaskBot:
+        icon: mdi-robot-happy
+        description: Telegram task & schedule bot (+ Google Calendar)
+        server: my-docker
+        container: taskbot
+        siteMonitor: http://taskbot:8000/healthz
+
+    - Newsfeed:
+        icon: si-rss
+        href: http://100.77.47.51:8001/
+        description: RSS → LLM enrichment → Telegram digest
+        server: my-docker
+        container: newsfeed-api
+        siteMonitor: http://newsfeed-api:8000/health
+
+    - Vaultwarden:
+        icon: si-vaultwarden
+        href: https://pan-homeserver.tail9ee4c5.ts.net/
+        description: Self-hosted password manager
+        server: my-docker
+        container: vaultwarden
+        siteMonitor: http://vaultwarden:80/alive
+
+    - n8n:
+        icon: si-n8n
+        href: http://100.77.47.51:5678/
+        description: Workflow / cron orchestrator
+        server: my-docker
+        container: n8n
+
+- Infrastructure:
+    - PostgreSQL:
+        icon: si-postgresql
+        description: Shared database — newsfeed · taskbot · n8n
+        server: my-docker
+        container: postgres
+
+    - Docker socket proxy:
+        icon: si-docker
+        description: Read-only socket view for this dashboard
+        server: my-docker
+        container: dockerproxy

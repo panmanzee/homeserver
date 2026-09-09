@@ -4,3 +4,6 @@ taskbot/.venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# homepage runtime logs
+homepage/config/logs/

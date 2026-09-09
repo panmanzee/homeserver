@@ -26,8 +26,13 @@ single Postgres, shipped with Docker Compose, administered entirely over SSH.
 | **[`newsfeed-api`](n8n-stack/newsfeed-api/)** | RSS → Postgres → LLM (factual summary + tickers/tags) → EOD prices → Telegram digest |
 | **[`taskbot`](n8n-stack/taskbot/)** | Plain-language Telegram bot → managed task list + Google Calendar mirror + daily plan/review |
 | `vaultwarden` | Self-hosted Bitwarden-compatible password manager, reachable only over Tailscale (HTTPS via `tailscale serve`) |
+| `homepage` | Dashboard — every service, live container status, system resources; behind Tailscale (`+ dockerproxy`, a read-only Docker-socket filter) |
 | `n8n` | Cron orchestrator — calls `newsfeed-api` on a schedule |
 | `postgres` | One instance, one database per service (`newsfeed`, `taskbot`, `n8n`) |
+
+Reached over Tailscale only: the dashboard at `https://<host>.ts.net:8443/`, the
+vault at `https://<host>.ts.net/`. Nothing is exposed to the LAN or the internet
+via `tailscale serve` — no Funnel.
 
 Nightly `scripts/backup.sh` (cron, 03:00) dumps every Postgres database plus the
 `n8n` and `vaultwarden` data volumes into one timestamped `~/backups/*.tar.gz`,

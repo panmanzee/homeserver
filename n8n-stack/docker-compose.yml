@@ -99,6 +99,38 @@ services:
     ports:
       - "127.0.0.1:8003:80"
 
+  # Read-only, filtered view of the Docker socket so `homepage` can show
+  # container status without mounting the real socket (which is root-on-host).
+  dockerproxy:
+    image: tecnativa/docker-socket-proxy:0.3
+    container_name: dockerproxy
+    restart: always
+    environment:
+      CONTAINERS: 1      # list + inspect containers — all Homepage needs
+      POST: 0            # deny every write (create/start/stop/exec/…)
+      # everything else defaults to 0 (denied)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # no host port — Homepage reaches it as http://dockerproxy:2375 on the compose net
+
+  # Homepage dashboard. Stateless — config is the YAML in ./homepage/config.
+  # Bound to localhost; reached only via `tailscale serve --https=8443`.
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v2.2.0
+    container_name: homepage
+    restart: always
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: pan-homeserver.tail9ee4c5.ts.net:8443,pan-homeserver.tail9ee4c5.ts.net,localhost:8004,127.0.0.1:8004
+      PUID: "1000"
+      PGID: "1000"
+    volumes:
+      - ./homepage/config:/app/config
+      - /:/host/root:ro          # read-only, for the disk-usage widget only
+    ports:
+      - "127.0.0.1:8004:3000"
+    depends_on:
+      - dockerproxy
+
 volumes:
   postgres_data:
   n8n_data:

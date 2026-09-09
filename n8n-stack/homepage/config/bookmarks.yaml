@@ -1,0 +1,15 @@
+- Repos:
+    - homeserver:
+        - abbr: GH
+          href: https://github.com/panmanzee/homeserver
+    - network-automation-labs:
+        - abbr: GH
+          href: https://github.com/panmanzee/network-automation-labs
+
+- Admin:
+    - Tailscale machines:
+        - abbr: TS
+          href: https://login.tailscale.com/admin/machines
+    - n8n editor:
+        - abbr: N8
+          href: http://100.77.47.51:5678/
