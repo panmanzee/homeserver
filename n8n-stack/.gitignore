@@ -7,3 +7,7 @@ __pycache__/
 
 # homepage runtime logs
 homepage/config/logs/
+
+# rag-api corpus — copyrighted study material, never committed
+rag-api/corpus/*
+!rag-api/corpus/.gitkeep
