@@ -82,6 +82,24 @@ services:
     depends_on:
       - postgres
 
+  vaultwarden:
+    image: vaultwarden/server:1.37.2
+    container_name: vaultwarden
+    restart: always
+    environment:
+      # Public URL the vault is reached at — must match the tailscale serve host.
+      DOMAIN: ${VAULTWARDEN_DOMAIN:?set VAULTWARDEN_DOMAIN in .env}
+      # true only long enough to register the first account, then flip to false.
+      SIGNUPS_ALLOWED: ${VAULTWARDEN_SIGNUPS_ALLOWED:-false}
+      # /admin panel stays disabled (no ADMIN_TOKEN) — one user doesn't need it.
+    volumes:
+      - vaultwarden_data:/data
+    # localhost only: `tailscale serve` (https://<host>.ts.net → 127.0.0.1:8003)
+    # is the sole way in. Never bound to the LAN or the internet.
+    ports:
+      - "127.0.0.1:8003:80"
+
 volumes:
   postgres_data:
   n8n_data:
+  vaultwarden_data:
