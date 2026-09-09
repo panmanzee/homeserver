@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import pathlib
 from typing import Any
 
@@ -23,7 +24,7 @@ pool = ConnectionPool(
     settings.database_url,
     min_size=0,
     max_size=5,
-    open=False,
+    open=True,
     configure=_configure,
     kwargs={"row_factory": dict_row, "connect_timeout": 10},
     timeout=15,
@@ -42,3 +43,48 @@ def apply_schema() -> None:
     with psycopg.connect(settings.database_url, connect_timeout=10) as conn:
         conn.execute(_SCHEMA)
         conn.commit()
+
+
+_SEARCH_COLS = ("c.id, c.document_id, d.filename, c.page, c.text")
+
+
+def vector_search(qvec: list[float], n: int) -> list[dict[str, Any]]:
+    with pool.connection() as conn:
+        rows = conn.execute(
+            f"SELECT {_SEARCH_COLS} FROM chunks c JOIN documents d ON d.id = c.document_id "
+            "ORDER BY c.embedding <=> %s::vector LIMIT %s",
+            (qvec, n),
+        ).fetchall()
+    for i, r in enumerate(rows, 1):
+        r["rank"] = i
+    return rows
+
+
+def keyword_search(qtext: str, n: int) -> list[dict[str, Any]]:
+    with pool.connection() as conn:
+        q = conn.execute("SELECT websearch_to_tsquery('english', %s)::text AS q",
+                         (qtext,)).fetchone()
+        if not q or not q["q"]:
+            return []
+        rows = conn.execute(
+            f"SELECT {_SEARCH_COLS} FROM chunks c JOIN documents d ON d.id = c.document_id "
+            "WHERE c.tsv @@ websearch_to_tsquery('english', %s) "
+            "ORDER BY ts_rank_cd(c.tsv, websearch_to_tsquery('english', %s)) DESC LIMIT %s",
+            (qtext, qtext, n),
+        ).fetchall()
+    for i, r in enumerate(rows, 1):
+        r["rank"] = i
+    return rows
+
+
+def stats() -> dict[str, Any]:
+    with pool.connection() as conn:
+        d = conn.execute("SELECT count(*) n, max(ingested_at) t FROM documents").fetchone()
+        c = conn.execute("SELECT count(*) n FROM chunks").fetchone()
+        u = conn.execute("SELECT n FROM usage WHERE day = current_date").fetchone()
+    return {"documents": d["n"], "chunks": c["n"],
+            "last_ingested_at": d["t"].isoformat() if d["t"] else None,
+            "questions_today": u["n"] if u else 0}
+
+
+atexit.register(pool.close)
