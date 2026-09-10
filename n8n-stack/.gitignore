@@ -11,3 +11,6 @@ homepage/config/logs/
 # rag-api corpus — copyrighted study material, never committed
 rag-api/corpus/*
 !rag-api/corpus/.gitkeep
+homepage/config/proxmox.yaml
+homepage/config/custom.css
+homepage/config/custom.js
