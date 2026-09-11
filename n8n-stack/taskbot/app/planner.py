@@ -30,7 +30,7 @@ _TROUBLE = "I'm having trouble right now — try again in a moment."
 
 ActionKind = Literal[
     "add_task", "add_event", "complete", "delete",
-    "reschedule", "convert", "rename", "list_day", "reply",
+    "reschedule", "convert", "rename", "calendar_sync", "list_day", "reply",
 ]
 
 
@@ -43,6 +43,7 @@ class Action(BaseModel):
     end: str | None = None
     estimate_minutes: int | None = None
     to_all_day: bool | None = None
+    to_calendar: bool = False          # explicit "add this to my Google Calendar"
     note: str | None = None
 
 
@@ -60,9 +61,10 @@ class PlannerError(RuntimeError):
 _ACTION_PROPS = {
     "kind": {"type": "string",
              "enum": ["add_task", "add_event", "complete", "delete",
-                      "reschedule", "convert", "rename", "list_day", "reply"]},
+                      "reschedule", "convert", "rename", "calendar_sync",
+                      "list_day", "reply"]},
     "target_id": {"type": "integer",
-                  "description": "id of an OPEN TASK for complete/delete/reschedule/convert/rename"},
+                  "description": "id of an OPEN TASK for complete/delete/reschedule/convert/rename/calendar_sync"},
     "title": {"type": "string",
               "description": "task/event title; for rename this is the NEW title"},
     "date": {"type": "string", "description": "YYYY-MM-DD"},
@@ -71,6 +73,8 @@ _ACTION_PROPS = {
     "estimate_minutes": {"type": "integer"},
     "to_all_day": {"type": "boolean",
                    "description": "convert: true = turn a timed event into an all-day task"},
+    "to_calendar": {"type": "boolean",
+                    "description": "add_task/add_event/reschedule/convert/rename only: true ONLY when the user explicitly asks to add/sync/put this on their Google Calendar"},
     "note": {"type": "string", "description": "used only with kind=reply"},
 }
 _SCHEMA: dict[str, Any] = {
@@ -109,9 +113,15 @@ it and re-add the pieces as separate actions, delete first.
 `reschedule` = "move X to <time/day>". `convert` + `to_all_day: true` = turn a \
 timed event into an all-day task. `rename` = change a task's wording (put the \
 new title in `title`).
-- For complete/delete/reschedule/convert/rename pick `target_id` from OPEN \
-TASKS by matching the user's words. "all done" after an evening review -> one \
-`complete` per open task for today.
+- By default, tasks and events are APP-ONLY — they do NOT go to Google \
+Calendar. Only set `to_calendar: true` on `add_task`/`add_event`/`reschedule`/ \
+`convert`/`rename` when the user explicitly says to add/sync/put it ON THEIR \
+CALENDAR (not just "remind me" or "schedule" — those stay app-only too). If \
+the user asks to put an EXISTING task on their calendar with no other change, \
+use `calendar_sync` with `target_id` instead of `to_calendar`.
+- For complete/delete/reschedule/convert/rename/calendar_sync pick `target_id` \
+from OPEN TASKS by matching the user's words. "all done" after an evening \
+review -> one `complete` per open task for today.
 - "what's today / show my day / tomorrow" -> `list_day` (with `date`).
 - If you genuinely cannot tell what the user wants, emit NO actions and put one \
 short question in `reply`.
@@ -136,6 +146,12 @@ Examples (NOW is 2026-09-07, tz Asia/Bangkok):
   "all done, and also tomorrow add task publish OS" ->
   complete(target_id=9),
   add_task(title="publish OS", date="2026-09-08")
+- "gym at 6pm" -> add_event(title="gym", start="2026-09-07T18:00")  (app-only,
+  to_calendar omitted/false)
+- "gym at 6pm, add it to my calendar" ->
+  add_event(title="gym", start="2026-09-07T18:00", to_calendar=true)
+- OPEN TASKS has id=6 "gym" TIMED 2026-09-07 18:00; "put the gym one on my
+  calendar" -> calendar_sync(target_id=6)
 
 Return one object matching the schema, `actions` first."""
 

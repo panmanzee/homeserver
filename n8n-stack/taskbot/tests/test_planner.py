@@ -125,3 +125,19 @@ def test_anthropic_path():
     p = make_plan("what's today", history=[], tasks=[], now=NOW, tz="UTC",
                   provider="anthropic", client=_FakeAnthropic())
     assert [a.kind for a in p.actions] == ["list_day"]
+
+
+def test_to_calendar_defaults_false():
+    p = _call({"actions": [{"kind": "add_event", "title": "gym", "start": "2026-09-07T18:00"}]})
+    assert p.actions[0].to_calendar is False
+
+
+def test_to_calendar_true_when_explicit():
+    p = _call({"actions": [{"kind": "add_event", "title": "gym",
+                            "start": "2026-09-07T18:00", "to_calendar": True}]})
+    assert p.actions[0].to_calendar is True
+
+
+def test_calendar_sync_kind_parses():
+    p = _call({"actions": [{"kind": "calendar_sync", "target_id": 6}]})
+    assert p.actions[0].kind == "calendar_sync" and p.actions[0].target_id == 6
