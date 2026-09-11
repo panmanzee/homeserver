@@ -55,6 +55,26 @@ def test_post_message_runs_real_pipeline(client, monkeypatch):
     assert any(t["title"] == "from webapp" for t in tasks)
 
 
+def test_message_add_task_default_does_not_sync(client, monkeypatch):
+    from app import handler, planner
+    monkeypatch.setattr(planner, "make_plan", lambda *a, **k: planner.Plan(
+        actions=[planner.Action(kind="add_task", title="no sync please")]))
+    synced = []
+    monkeypatch.setattr(handler.gcal, "sync_new", lambda row: synced.append(row["id"]))
+    client.post("/api/message", json={"text": "anything"})
+    assert synced == []
+
+
+def test_message_add_task_explicit_calendar_syncs(client, monkeypatch):
+    from app import handler, planner
+    monkeypatch.setattr(planner, "make_plan", lambda *a, **k: planner.Plan(
+        actions=[planner.Action(kind="add_task", title="sync this", to_calendar=True)]))
+    synced = []
+    monkeypatch.setattr(handler.gcal, "sync_new", lambda row: synced.append(row["id"]))
+    client.post("/api/message", json={"text": "anything"})
+    assert len(synced) == 1
+
+
 def test_direct_complete_bypasses_llm(client):
     from app import db
     row = db.create_task(title="hw", due_date=None)

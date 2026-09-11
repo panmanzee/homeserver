@@ -136,6 +136,8 @@ def api_tasks(day: str | None = None) -> list[dict]:
 @app.post("/api/message")
 async def api_message(body: MessageIn) -> dict:
     reply = await handler.handle(body.text, 0)
+    if reply:
+        await asyncio.to_thread(db.log_message, "out", reply)
     return {"reply": reply}
 
 

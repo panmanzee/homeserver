@@ -68,7 +68,8 @@ PAGE = """<!doctype html>
   <div id="lists"></div>
 </div>
 <script>
-function fmt(d) { return d.toISOString().slice(0, 10); }
+function fmt(d) { const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
 function isToday(d) { return fmt(d) === fmt(new Date()); }
 let current = new Date();
 
