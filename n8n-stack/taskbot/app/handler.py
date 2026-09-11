@@ -16,6 +16,7 @@ _GCAL_DISPATCH = {
     "reschedule": "sync_rescheduled",
     "convert": "sync_rescheduled",
     "rename": "sync_rescheduled",
+    "calendar_sync": "sync_new",
 }
 
 

@@ -134,6 +134,15 @@ def _rename(a: Action) -> tuple[str, dict | None]:
     return f'✏️ renamed to "{new["title"]}"', new
 
 
+def _calendar_sync(a: Action) -> tuple[str, dict | None]:
+    row = _target(a)
+    if not row:
+        return (a.note or f"which task? {_HINT}"), None
+    if row.get("gcal_event_id"):
+        return f'"{row["title"]}" is already on your calendar', None
+    return f'📅 added "{row["title"]}" to your calendar', row
+
+
 def _list_day(a: Action) -> tuple[str, None]:
     day = _parse_date(a.date) or clock.now_local().date()
     rows = db.tasks_for_day(day)
@@ -149,10 +158,19 @@ def _list_day(a: Action) -> tuple[str, None]:
 _TABLE = {
     "add_task": _add_task, "add_event": _add_event, "complete": _complete,
     "delete": _delete, "reschedule": _reschedule, "convert": _convert,
-    "rename": _rename, "list_day": _list_day,
+    "rename": _rename, "calendar_sync": _calendar_sync, "list_day": _list_day,
 }
-# kinds whose resulting row must be mirrored to Google Calendar
-_GCAL_KINDS = {"add_task", "add_event", "complete", "delete", "reschedule", "convert", "rename"}
+# Kinds that only sync a NEW row to Google Calendar when the user explicitly
+# asked (Action.to_calendar) — creating an event is the thing that must be opt-in.
+_GCAL_OPT_IN_KINDS = {"add_task", "add_event"}
+# Kinds that keep syncing an EXISTING row that was already opted in
+# (gcal_event_id already set), or sync it now if this message opts it in.
+_GCAL_EDIT_KINDS = {"reschedule", "convert", "rename"}
+# Kinds whose own gcal.py function already no-ops without a gcal_event_id, so
+# no gating is needed here — always safe to pass through.
+_GCAL_UNCONDITIONAL_KINDS = {"complete", "delete"}
+# calendar_sync's whole purpose is syncing on request — always pass through.
+_GCAL_ALWAYS_KINDS = {"calendar_sync"}
 
 
 def execute_plan(plan: Plan) -> tuple[list[str], list[tuple[str, dict]]]:
@@ -182,8 +200,15 @@ def execute_plan(plan: Plan) -> tuple[list[str], list[tuple[str, dict]]]:
             lines.append(f"⚠️ couldn't do: {a.kind}")
             continue
         lines.append(msg)
-        if row and a.kind in _GCAL_KINDS:
-            gcal_ops.append((a.kind, row))
+        if row:
+            wants_calendar = getattr(a, "to_calendar", False)
+            already_synced = bool(row.get("gcal_event_id"))
+            if a.kind in _GCAL_OPT_IN_KINDS and wants_calendar:
+                gcal_ops.append((a.kind, row))
+            elif a.kind in _GCAL_EDIT_KINDS and (already_synced or wants_calendar):
+                gcal_ops.append((a.kind, row))
+            elif a.kind in _GCAL_UNCONDITIONAL_KINDS or a.kind in _GCAL_ALWAYS_KINDS:
+                gcal_ops.append((a.kind, row))
     if not lines:
         lines.append(f"I didn't get that — {_HINT}")
     return lines, gcal_ops

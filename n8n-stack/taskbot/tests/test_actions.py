@@ -20,8 +20,8 @@ def test_single_add_task(monkeypatch):
                                       "scheduled_start": None, "gcal_event_id": None})
     lines, ops = actions.execute_plan(_plan(Action(kind="add_task", title="ml homework")))
     assert any("ml homework" in l and "today" in l for l in lines)
-    assert ops == [("add_task", {"id": 1, "title": "ml homework", "due_date": date(2026, 9, 7),
-                                 "scheduled_start": None, "gcal_event_id": None})]
+    # add_task is opt-in to calendar sync (Task 2) — no to_calendar means no gcal op.
+    assert ops == []
 
 
 def test_multi_action_runs_all_in_order(monkeypatch):
@@ -36,7 +36,9 @@ def test_multi_action_runs_all_in_order(monkeypatch):
         Action(kind="add_task", title="buy milk"),
     ))
     assert made == ["watch iman gadzhi", "go to gym", "buy milk"]
-    assert len(lines) == 3 and len(ops) == 3
+    # add_task/add_event are opt-in to calendar sync (Task 2); none of these
+    # actions set to_calendar, so no gcal ops are produced.
+    assert len(lines) == 3 and len(ops) == 0
 
 
 def test_reply_preamble_is_first_line(monkeypatch):
@@ -73,10 +75,13 @@ def test_convert_timed_to_all_day(monkeypatch):
 
 
 def test_rename(monkeypatch):
+    # rename is an edit kind — it only keeps syncing to calendar if the task
+    # was already synced (gcal_event_id set). Pin that here with "evt1".
     monkeypatch.setattr(actions.db, "get_task",
-                        lambda i: {"id": 7, "title": "ml homwork", "status": "pending"})
+                        lambda i: {"id": 7, "title": "ml homwork", "status": "pending",
+                                   "gcal_event_id": "evt1"})
     monkeypatch.setattr(actions.db, "rename_task",
-                        lambda i, t: {"id": 7, "title": t, "gcal_event_id": None})
+                        lambda i, t: {"id": 7, "title": t, "gcal_event_id": "evt1"})
     lines, ops = actions.execute_plan(_plan(Action(kind="rename", target_id=7, title="ML homework")))
     assert any("ML homework" in l for l in lines) and ops[0][0] == "rename"
 
@@ -187,3 +192,93 @@ def test_list_day(monkeypatch):
     lines, ops = actions.execute_plan(_plan(Action(kind="list_day", date="2026-09-07")))
     joined = "\n".join(lines)
     assert "gym" in joined and "ml homework" in joined and ops == []
+
+
+def test_add_event_default_no_calendar(monkeypatch):
+    monkeypatch.setattr(actions.db, "create_task",
+                        lambda **kw: {"id": 1, "title": kw["title"], "due_date": None,
+                                      "scheduled_start": kw.get("scheduled_start"),
+                                      "gcal_event_id": None})
+    lines, ops = actions.execute_plan(_plan(Action(kind="add_event", title="gym", start="2026-09-07T18:00")))
+    assert ops == []
+
+
+def test_add_event_explicit_calendar(monkeypatch):
+    monkeypatch.setattr(actions.db, "create_task",
+                        lambda **kw: {"id": 1, "title": kw["title"], "due_date": None,
+                                      "scheduled_start": kw.get("scheduled_start"),
+                                      "gcal_event_id": None})
+    lines, ops = actions.execute_plan(_plan(Action(kind="add_event", title="gym",
+                                                   start="2026-09-07T18:00", to_calendar=True)))
+    assert ops == [("add_event", {"id": 1, "title": "gym", "due_date": None,
+                                  "scheduled_start": ops[0][1]["scheduled_start"],
+                                  "gcal_event_id": None})]
+
+
+def test_add_task_default_no_calendar(monkeypatch):
+    monkeypatch.setattr(actions.db, "create_task",
+                        lambda **kw: {"id": 2, "title": kw["title"], "due_date": kw.get("due_date"),
+                                      "scheduled_start": None, "gcal_event_id": None})
+    lines, ops = actions.execute_plan(_plan(Action(kind="add_task", title="hw")))
+    assert ops == []
+
+
+def test_reschedule_unsynced_no_calendar_by_default(monkeypatch):
+    monkeypatch.setattr(actions.db, "get_task",
+                        lambda i: {"id": 5, "title": "gym", "status": "pending",
+                                   "scheduled_start": datetime(2026, 9, 7, 18, 0),
+                                   "scheduled_end": datetime(2026, 9, 7, 19, 0),
+                                   "gcal_event_id": None})
+    monkeypatch.setattr(actions.db, "reschedule_task",
+                        lambda i, **kw: {"id": 5, "title": "gym", "due_date": None,
+                                        "scheduled_start": kw["scheduled_start"],
+                                        "scheduled_end": kw["scheduled_end"], "gcal_event_id": None})
+    lines, ops = actions.execute_plan(_plan(Action(kind="reschedule", target_id=5, start="2026-09-07T19:00")))
+    assert ops == []
+
+
+def test_reschedule_already_synced_keeps_syncing(monkeypatch):
+    monkeypatch.setattr(actions.db, "get_task",
+                        lambda i: {"id": 5, "title": "gym", "status": "pending",
+                                   "scheduled_start": datetime(2026, 9, 7, 18, 0),
+                                   "scheduled_end": datetime(2026, 9, 7, 19, 0),
+                                   "gcal_event_id": "evt1"})
+    monkeypatch.setattr(actions.db, "reschedule_task",
+                        lambda i, **kw: {"id": 5, "title": "gym", "due_date": None,
+                                        "scheduled_start": kw["scheduled_start"],
+                                        "scheduled_end": kw["scheduled_end"], "gcal_event_id": "evt1"})
+    lines, ops = actions.execute_plan(_plan(Action(kind="reschedule", target_id=5, start="2026-09-07T19:00")))
+    assert ops and ops[0][0] == "reschedule"
+
+
+def test_complete_unsynced_no_calendar(monkeypatch):
+    monkeypatch.setattr(actions.db, "get_task",
+                        lambda i: {"id": 5, "title": "gym", "status": "pending", "gcal_event_id": None})
+    monkeypatch.setattr(actions.db, "set_status",
+                        lambda i, s: {"id": 5, "title": "gym", "status": s, "gcal_event_id": None})
+    lines, ops = actions.execute_plan(_plan(Action(kind="complete", target_id=5)))
+    # complete/delete are unconditionally in _GCAL_KINDS (gcal.py itself no-ops
+    # without a gcal_event_id) — this pins that the ROW passed through still
+    # carries gcal_event_id=None so gcal.sync_completed's own guard applies.
+    assert ops == [("complete", {"id": 5, "title": "gym", "status": "done", "gcal_event_id": None})]
+
+
+def test_calendar_sync_new_row(monkeypatch):
+    monkeypatch.setattr(actions.db, "get_task",
+                        lambda i: {"id": 6, "title": "gym", "status": "pending", "gcal_event_id": None})
+    lines, ops = actions.execute_plan(_plan(Action(kind="calendar_sync", target_id=6)))
+    assert "added" in lines[0].lower() and "gym" in lines[0]
+    assert ops == [("calendar_sync", {"id": 6, "title": "gym", "status": "pending", "gcal_event_id": None})]
+
+
+def test_calendar_sync_already_synced(monkeypatch):
+    monkeypatch.setattr(actions.db, "get_task",
+                        lambda i: {"id": 6, "title": "gym", "status": "pending", "gcal_event_id": "evt1"})
+    lines, ops = actions.execute_plan(_plan(Action(kind="calendar_sync", target_id=6)))
+    assert "already" in lines[0].lower() and ops == []
+
+
+def test_calendar_sync_unknown_task(monkeypatch):
+    monkeypatch.setattr(actions.db, "get_task", lambda i: None)
+    lines, ops = actions.execute_plan(_plan(Action(kind="calendar_sync", target_id=99)))
+    assert ops == [] and "which task" in lines[0].lower()

@@ -59,3 +59,14 @@ async def test_utc_nudge_once(monkeypatch):
     first = await handler.handle("x", 4)
     second = await handler.handle("y", 5)
     assert "TASKBOT_TZ" in first and "TASKBOT_TZ" not in second
+
+
+@pytest.mark.asyncio
+async def test_calendar_sync_dispatches_to_sync_new(monkeypatch):
+    synced = []
+    monkeypatch.setattr(handler.planner, "make_plan", lambda *a, **k: Plan(actions=[]))
+    monkeypatch.setattr(handler.actions, "execute_plan",
+                        lambda p: (["ok"], [("calendar_sync", {"id": 6})]))
+    monkeypatch.setattr(handler.gcal, "sync_new", lambda row: synced.append(row["id"]))
+    await handler.handle("x", 1)
+    assert synced == [6]
