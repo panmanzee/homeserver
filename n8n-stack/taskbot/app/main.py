@@ -8,12 +8,13 @@ import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from . import actions, clock, db, handler, jobs, telegram
+from . import actions, clock, db, handler, jobs, telegram, web
 from .config import settings
 from .planner import Action, Plan
 
@@ -90,6 +91,11 @@ AuthDep = Depends(require_api_key)
 
 class MessageIn(BaseModel):
     text: str
+
+
+@app.get("/", response_class=HTMLResponse)
+def index() -> str:
+    return web.PAGE
 
 
 @app.get("/healthz")

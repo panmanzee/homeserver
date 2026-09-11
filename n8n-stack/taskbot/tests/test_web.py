@@ -99,3 +99,12 @@ def test_direct_calendar_add(client, monkeypatch):
 def test_direct_calendar_add_unknown_task_404(client):
     r = client.post("/api/tasks/999999/calendar")
     assert r.status_code == 404
+
+
+def test_root_serves_self_contained_html(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    body = r.text
+    assert "<html" in body.lower()
+    assert "<script src=" not in body.lower()
+    assert '<link rel="stylesheet" href=' not in body.lower()
