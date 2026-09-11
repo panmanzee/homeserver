@@ -8,12 +8,14 @@ import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from pydantic import BaseModel
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from . import clock, db, handler, jobs, telegram
+from . import actions, clock, db, handler, jobs, telegram
 from .config import settings
+from .planner import Action, Plan
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -86,6 +88,10 @@ def require_api_key(x_api_key: str = Header(default="")) -> None:
 AuthDep = Depends(require_api_key)
 
 
+class MessageIn(BaseModel):
+    text: str
+
+
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     db.ping()
@@ -100,3 +106,53 @@ def _job_morning() -> dict[str, str]:
 @app.post("/jobs/evening-review", dependencies=[AuthDep])
 def _job_evening() -> dict[str, str]:
     return {"sent": jobs.evening_review()}
+
+
+def _task_json(row: dict) -> dict:
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "status": row["status"],
+        "due_date": row["due_date"].isoformat() if row.get("due_date") else None,
+        "scheduled_start": row["scheduled_start"].isoformat() if row.get("scheduled_start") else None,
+        "scheduled_end": row["scheduled_end"].isoformat() if row.get("scheduled_end") else None,
+        "synced": bool(row.get("gcal_event_id")),
+    }
+
+
+@app.get("/api/tasks")
+def api_tasks(day: str | None = None) -> list[dict]:
+    from datetime import date as _date
+    d = _date.fromisoformat(day) if day else clock.now_local().date()
+    return [_task_json(r) for r in db.tasks_for_day(d)]
+
+
+@app.post("/api/message")
+async def api_message(body: MessageIn) -> dict:
+    reply = await handler.handle(body.text, 0)
+    return {"reply": reply}
+
+
+def _run_single_action(a: Action) -> None:
+    lines, gcal_ops = actions.execute_plan(Plan(actions=[a]))
+    handler._sync(gcal_ops)
+
+
+@app.post("/api/tasks/{task_id}/complete")
+def api_complete(task_id: int) -> dict:
+    _run_single_action(Action(kind="complete", target_id=task_id))
+    return {"status": "ok"}
+
+
+@app.delete("/api/tasks/{task_id}")
+def api_delete(task_id: int) -> dict:
+    _run_single_action(Action(kind="delete", target_id=task_id))
+    return {"status": "ok"}
+
+
+@app.post("/api/tasks/{task_id}/calendar")
+def api_add_to_calendar(task_id: int) -> dict:
+    if not db.get_task(task_id):
+        raise HTTPException(status_code=404, detail="task not found")
+    _run_single_action(Action(kind="calendar_sync", target_id=task_id))
+    return {"status": "ok"}
