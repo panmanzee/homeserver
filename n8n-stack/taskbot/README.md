@@ -15,13 +15,15 @@ provider settings as `newsfeed-api` (`LLM_PROVIDER`, default `gemini`, with
 Claude instead). Just open Telegram and text the bot. It only ever responds to
 messages from `TELEGRAM_CHAT_ID` and silently ignores every other chat.
 
+A web app is also available — see [Web app](#web-app) below.
+
 The two things below are optional polish:
 
 1. **Timezone** — until you set it, the bot runs on UTC and says so in its first
    reply and every morning plan.
 2. **Google Calendar mirror** — until you set it up, all task management and the
    morning/evening messages work over Telegram; only the calendar sync is
-   skipped.
+   skipped. Even once configured, sync is **opt-in per task** — see below.
 
 ## 1. Set the timezone (recommended, no calendar needed)
 
@@ -39,12 +41,18 @@ times for the morning plan (`TASKBOT_MORNING_TIME`, default `07:30`) and evening
 review (`TASKBOT_EVENING_TIME`, default `21:00`). An invalid zone falls back to
 UTC with a warning.
 
-## 2. Google Calendar mirror (optional)
+## 2. Google Calendar mirror (optional, opt-in per task)
 
 This is the **only** part of setup that needs you at a browser — it can't be
-automated on the headless box. When configured, every task/event is mirrored to
-a dedicated secondary calendar called **Tasks** (the bot never reads or touches
-your primary calendar).
+automated on the headless box. When configured, tasks/events are mirrored to a
+dedicated secondary calendar called **Tasks** (the bot never reads or touches
+your primary calendar) — but **only when you explicitly ask for it**. A plain
+`gym at 6pm` or `math homework tomorrow` stays app-only (Telegram + the
+[web app](#web-app)). Say `gym at 6pm, add it to my calendar` (or, for a task
+you already added, `put the gym one on my calendar`, or tap the 📅 button in
+the web app) to sync that one. Once a task is on the calendar, editing it
+(reschedule / rename / convert / complete / delete) keeps the calendar entry in
+sync automatically — you don't have to re-ask each time.
 
 ### 2a. Google Cloud project
 
@@ -114,13 +122,15 @@ of these actions:
 
 | You say | Action | Effect |
 | --- | --- | --- |
-| `math homework today` / `finish the report` | add task | untimed task on a day (default: today); all-day calendar chip |
-| `gym at 11pm` / `call mom tomorrow 14:30` | add event | timed task + timed calendar event (default 60 min) |
-| `done with the gym` / `finished the homework` | complete | marks it done; calendar event renamed `✓ <title>` |
-| `delete the math homework` / `cancel the call` | delete | cancels the task; calendar event removed |
-| `move gym to 9pm` / `reschedule the report to friday` | reschedule | updates the slot; calendar event patched |
+| `math homework today` / `finish the report` | add task | untimed task on a day (default: today); **app-only** unless you say "add to calendar" |
+| `gym at 11pm` / `call mom tomorrow 14:30` | add event | timed task (default 60 min); **app-only** unless you say "add to calendar" |
+| `gym at 6pm, add it to my calendar` | add event (opt-in) | same as above, plus a timed calendar event right away |
+| `put the gym one on my calendar` | calendar sync | syncs an *existing* task/event to the calendar with no other change |
+| `done with the gym` / `finished the homework` | complete | marks it done; if already on the calendar, event renamed `✓ <title>` |
+| `delete the math homework` / `cancel the call` | delete | cancels the task; if already on the calendar, event removed |
+| `move gym to 9pm` / `reschedule the report to friday` | reschedule | updates the slot; if already on the calendar, event patched — otherwise stays app-only |
 | `what's today` / `show my day` / `what do i have tomorrow` | list day | replies with that day's tasks and timed items |
-| `make the gym all-day` / `rename "call mom" to "call mom about tickets"` | convert / rename | flips a timed event to an all-day task, or changes a task's wording; calendar entry follows |
+| `make the gym all-day` / `rename "call mom" to "call mom about tickets"` | convert / rename | flips a timed event to an all-day task, or changes a task's wording; keeps syncing if already on the calendar |
 | anything unclear | (a question) | replies asking which task / what you meant; no state change |
 
 You can put several things in one message (`watch a video all day, gym at 6pm,
@@ -130,6 +140,24 @@ it remembers the last few turns and edits what it just did.
 For complete / delete / reschedule / convert / rename the model matches your
 words against your open tasks. If nothing matches, or two match equally, the bot
 asks which one.
+
+## Web app
+
+A day-planner web page lives at the same service, reachable anywhere over
+Tailscale (no LAN exposure, no separate login — the tailnet is the perimeter,
+same as `rag-api`):
+
+**<https://pan-homeserver.tail9ee4c5.ts.net:8448/>**
+
+It shows a 7-day date strip, the day's timed and all-day items, a text box that
+runs the exact same natural-language pipeline as Telegram (so it shares
+history, logging, and the calendar opt-in rule below), and per-task
+checkbox-to-complete, 📅-to-sync, ×-to-delete controls. Works on phone or
+desktop, light/dark follows your system theme, no app install.
+
+Because it's the same backend, **anything typed in the web app or in Telegram
+behaves identically** — including the calendar opt-in rule: new tasks/events
+stay app-only until you explicitly say "add to calendar" or tap 📅.
 
 ## How it's wired
 
@@ -179,6 +207,12 @@ exposure).
 | `GET` | `/healthz` | none | `{"status":"ok"}` — DB ping |
 | `POST` | `/jobs/morning-plan` | `X-API-Key: $SERVICE_API_KEY` | run the morning plan now (sends the Telegram message) |
 | `POST` | `/jobs/evening-review` | `X-API-Key: $SERVICE_API_KEY` | run the evening review now |
+| `GET` | `/` | none | the [web app](#web-app) page |
+| `GET` | `/api/tasks?day=YYYY-MM-DD` | none (tailnet-only) | that day's tasks as JSON, with a computed `synced` flag |
+| `POST` | `/api/message` | none (tailnet-only) | `{"text": "..."}` → runs the same pipeline as Telegram, returns `{"reply": ...}` |
+| `POST` | `/api/tasks/{id}/complete` | none (tailnet-only) | mark a task done |
+| `DELETE` | `/api/tasks/{id}` | none (tailnet-only) | cancel a task |
+| `POST` | `/api/tasks/{id}/calendar` | none (tailnet-only) | sync an existing task to Google Calendar now |
 
 ```bash
 curl -s http://127.0.0.1:8002/healthz
