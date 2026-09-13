@@ -193,6 +193,23 @@ services:
       - "100.77.47.51:53:53/udp"
       - "127.0.0.1:8007:3000"      # admin UI (set web port = 3000 in the setup wizard)
 
+  # KanjiDojo — personal kanji study app (github.com/panmanzee/learn-kanji).
+  # FastAPI serves the static frontend + a small JSON API; state lives in the
+  # shared Postgres (own `kanjidojo` database, same one-DB-per-service
+  # pattern as the rest of the stack) — no separate volume needed.
+  # Build context is a sibling checkout, not this repo (it's the user's own
+  # standalone project, kept independently versioned on GitHub).
+  kanjidojo:
+    build: ../../learn-kanji
+    container_name: kanjidojo
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://n8n:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/kanjidojo
+    ports:
+      - "127.0.0.1:8009:8000"
+    depends_on:
+      - postgres
+
 volumes:
   postgres_data:
   n8n_data:

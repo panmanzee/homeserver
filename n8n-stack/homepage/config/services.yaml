@@ -37,6 +37,14 @@
         server: my-docker
         container: actual
 
+    - KanjiDojo:
+        icon: mdi-translate
+        href: https://pan-homeserver.tail9ee4c5.ts.net:8449/
+        description: Personal kanji study — SRS reviews
+        server: my-docker
+        container: kanjidojo
+        siteMonitor: http://kanjidojo:8000/
+
 - Infrastructure:
     - PostgreSQL:
         icon: si-postgresql
