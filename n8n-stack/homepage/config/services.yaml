@@ -1,6 +1,7 @@
 - Apps:
     - TaskBot:
         icon: mdi-robot-happy
+        href: https://pan-homeserver.tail9ee4c5.ts.net:8448/
         description: Telegram task & schedule bot (+ Google Calendar)
         server: my-docker
         container: taskbot
