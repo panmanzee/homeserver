@@ -2,20 +2,22 @@
 
 # 🏠 pan-homeserver
 
-**A self-hosted automation stack on a 2013 mini PC.**
+**A 12-container self-hosted platform on a 2013 mini PC.**
 
-Three application services on one Intel i5-4570T box — an AI news-digest
-pipeline, a conversational Telegram task manager, and a RAG study-Q&A service —
-plus a Tailscale-only dashboard and password vault, orchestrated by n8n, backed
-by a single Postgres (with `pgvector`), shipped with Docker Compose,
-administered entirely over SSH.
+Three custom-built application services — an AI news-digest pipeline, a
+conversational Telegram task manager, and a RAG study-Q&A bot — running
+alongside a password vault, uptime monitoring, budgeting, and DNS filtering,
+all behind a single dashboard, orchestrated by n8n, backed by one Postgres
+(with `pgvector`), shipped with Docker Compose, administered entirely over
+SSH with zero ports exposed to the public internet.
 
 ![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
-![n8n](https://img.shields.io/badge/n8n-workflows-EA4B71?logo=n8n&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-pytest%20%C2%B7%20externals%20mocked-0A9EDC)
+![Tailscale](https://img.shields.io/badge/Tailscale-only%20access-black?logo=tailscale&logoColor=white)
+![Containers](https://img.shields.io/badge/containers-12-2496ED)
+![Tests](https://img.shields.io/badge/tests-159%20passing-0A9EDC)
 
 </div>
 
@@ -23,25 +25,36 @@ administered entirely over SSH.
 
 ## What's in the box
 
+**Custom-built** (this repo's own FastAPI services — see the sections below):
+
 | Service | What it does |
 |---|---|
 | **[`newsfeed-api`](n8n-stack/newsfeed-api/)** | RSS → Postgres → LLM (factual summary + tickers/tags) → EOD prices → Telegram digest |
 | **[`taskbot`](n8n-stack/taskbot/)** | Plain-language Telegram bot + web app → managed task list + opt-in Google Calendar sync + daily plan/review; Tailscale `:8448` |
 | **[`rag-api`](n8n-stack/rag-api/)** | Ask questions about your own PDFs/notes; hybrid retrieval (pgvector + full-text + RRF) + cited answers; Tailscale `:8444` |
-| `vaultwarden` | Self-hosted Bitwarden-compatible password manager, reachable only over Tailscale (HTTPS via `tailscale serve`) |
-| `homepage` | Dashboard — every service, live container status, system resources; behind Tailscale (`+ dockerproxy`, a read-only Docker-socket filter) |
+
+**Deployed & operated** (off-the-shelf images, wired into the same
+compose/backup/Tailscale/dashboard setup):
+
+| Service | What it does |
+|---|---|
+| `vaultwarden` | Bitwarden-compatible password manager — Tailscale `:443` |
+| `homepage` | Dashboard — every service, live container status, system resources; `+ dockerproxy`, a read-only Docker-socket filter — Tailscale `:8443` |
+| `uptime-kuma` | Uptime monitoring for every service's health endpoint, Telegram alerts on failure — Tailscale `:8445` |
+| `actual` | Actual Budget — self-hosted envelope budgeting — Tailscale `:8447` |
+| `adguard` | AdGuard Home — DNS ad/tracker blocking, opt-in per tailnet device — Tailscale `:8446` |
+| `kanjidojo` | Kanji/kana SRS study app — the user's own separate [`learn-kanji`](https://github.com/panmanzee/learn-kanji) repo, built as a sibling checkout — Tailscale `:8449` |
 | `n8n` | Cron orchestrator — calls `newsfeed-api` on a schedule |
-| `postgres` | One instance, one database per service (`newsfeed`, `taskbot`, `n8n`, `rag` on `pgvector`) |
+| `postgres` | One instance, one database per service (`pgvector`-enabled) |
 
-Reached over Tailscale only: the dashboard at `https://<host>.ts.net:8443/`, the
-vault at `https://<host>.ts.net/`, the study-Q&A page at
-`https://<host>.ts.net:8444/`, and the taskbot web app at
-`https://<host>.ts.net:8448/`. Nothing is exposed to the LAN or the internet
-via `tailscale serve` — no Funnel.
+Everything is reached over **Tailscale only**, via `tailscale serve` — one
+port per service, TLS terminated by Tailscale, nothing bound to the LAN or the
+public internet, no Funnel.
 
-Nightly `scripts/backup.sh` (cron, 03:00) dumps every Postgres database plus the
-`n8n` and `vaultwarden` data volumes into one timestamped `~/backups/*.tar.gz`,
-keeping the last 14.
+Nightly `scripts/backup.sh` (cron, 03:00) dumps every Postgres database plus
+every service's data volume into one timestamped `~/backups/*.tar.gz`, keeping
+the last 14 — with an optional off-box copy to Backblaze B2 via `rclone`
+(skips cleanly if not configured).
 
 > **SSH-only.** No monitor, keyboard, or IPMI on this box. Every change lands
 > through version control and `docker compose` — nothing is hand-edited on the
@@ -67,7 +80,7 @@ flowchart TB
       TS(["your devices"])
     end
 
-    subgraph box[" pan-homeserver · Docker Compose "]
+    subgraph box[" pan-homeserver · Docker Compose · 12 containers "]
       direction TB
       N8N["n8n<br/>scheduler / orchestrator"]
       NF["newsfeed-api<br/>FastAPI"]
@@ -75,7 +88,11 @@ flowchart TB
       RAG["rag-api<br/>FastAPI · hybrid retrieval"]
       HP["homepage<br/>dashboard (+ dockerproxy)"]
       VW["vaultwarden<br/>password manager"]
-      PG[("PostgreSQL 16 · pgvector<br/>newsfeed · taskbot · n8n · rag")]
+      UK["uptime-kuma"]
+      AB["actual budget"]
+      AG["adguard home"]
+      KJ["kanjidojo"]
+      PG[("PostgreSQL 16 · pgvector<br/>one DB per service")]
     end
 
     RSS --> NF
@@ -90,8 +107,13 @@ flowchart TB
     TB --> GC
     RAG <--> GEM
     RAG --> PG
+    KJ --> PG
+    UK -. "probes" .-> NF & TB & RAG
+    UK --> TG
     TS -. ":8444" .-> RAG
     TS -. ":8443" .-> HP
+    TS -. ":8448" .-> TB
+    TS -. ":8445 · :8447 · :8446 · :8449" .-> UK & AB & AG & KJ
     TS -. "HTTPS" .-> VW
 ```
 
@@ -189,6 +211,31 @@ Drop files in `corpus/` (bind-mounted read-only, gitignored) then
 
 ---
 
+## 🧩 Other self-hosted services
+
+Off-the-shelf apps, wired into the same Docker Compose stack, Postgres,
+Tailscale `serve` map, dashboard, and nightly backup as the custom services
+above:
+
+- **Vaultwarden** — Bitwarden-compatible vault; bound to `127.0.0.1` only, the
+  `/admin` panel disabled, reached solely through `tailscale serve` HTTPS.
+- **Uptime Kuma** — polls every service's health endpoint and pushes a
+  Telegram alert on failure.
+- **Actual Budget** — self-hosted envelope budgeting (SQLite-backed, chosen
+  over Firefly III for a lighter footprint on this hardware).
+- **AdGuard Home** — DNS ad/tracker blocking. The DNS listener is bound
+  **only** to the Tailscale interface IP, never the LAN or the router — a
+  deliberate safety boundary so it can never take down name resolution for
+  the box itself. Opt-in per device.
+- **KanjiDojo** — a separate personal project
+  ([`panmanzee/learn-kanji`](https://github.com/panmanzee/learn-kanji), its
+  own FastAPI + vanilla-JS app) deployed here as a sibling checkout — the
+  reusable pattern for running any of my own repos on this box at zero
+  extra infrastructure cost: its own Postgres database, no new container
+  image to maintain, covered by the same backup script automatically.
+
+---
+
 ## 🧰 Tech stack
 
 | Layer | Choice |
@@ -200,8 +247,10 @@ Drop files in `corpus/` (bind-mounted read-only, gitignored) then
 | LLM | Google Gemini (default) / Anthropic Claude (optional) — structured output & tool-use; `gemini-embedding-001` for RAG embeddings |
 | Integrations | Telegram Bot API · Google Calendar API · Twelve Data |
 | Scheduling | n8n cron workflows (cross-service) · APScheduler (in-process jobs) |
-| Delivery | Docker Compose · multi-stage `python:3.12-slim` images |
-| Tests | pytest — every external (HTTP, LLM, DB) mocked; `respx` for request-level assertions |
+| Networking | Tailscale mesh VPN — `tailscale serve` per-port HTTPS, zero inbound ports on the router, no Funnel |
+| Delivery | Docker Compose · multi-stage `python:3.12-slim` images · read-only Docker-socket proxy for the dashboard |
+| Backups | Nightly `pg_dumpall` + volume tar, 14-day local retention, optional off-box copy via `rclone` (Backblaze B2) |
+| Tests | pytest — every external (HTTP, LLM, DB) mocked; `respx` for request-level assertions — **159 tests** across the 3 custom services |
 
 ---
 
@@ -210,16 +259,23 @@ Drop files in `corpus/` (bind-mounted read-only, gitignored) then
 ```
 .
 ├── n8n-stack/
-│   ├── docker-compose.yml          # postgres · n8n · newsfeed-api · taskbot · vaultwarden · homepage · rag-api
+│   ├── docker-compose.yml          # all 12 services
 │   ├── .env.example                # every knob, documented
 │   ├── newsfeed-api/               # FastAPI: RSS · LLM enrichment · prices · Telegram
 │   ├── taskbot/                    # FastAPI + long-poll worker: tasks · calendar
 │   ├── rag-api/                    # FastAPI: PDF/notes ingest · hybrid retrieval · cited answers
+│   ├── homepage/config/            # dashboard tile config (tracked in git)
+│   ├── scripts/backup.sh           # nightly pg_dumpall + volume tar (+ optional rclone off-box copy)
 │   └── n8n/workflows/              # exported n8n cron workflows
 └── docs/
     ├── portfolio-roadmap.md
     └── superpowers/{specs,plans}/  # brainstorm → spec → plan, one set per service
 ```
+
+The off-the-shelf services (Vaultwarden, Uptime Kuma, Actual, AdGuard) ship no
+custom code, so they're config-only in this repo (compose block + `.env` +
+dashboard tile); KanjiDojo lives in its own sibling repo entirely, built via
+`build: ../../learn-kanji`.
 
 ---
 
@@ -228,17 +284,18 @@ Drop files in `corpus/` (bind-mounted read-only, gitignored) then
 ```bash
 cd n8n-stack
 cp .env.example .env          # fill in POSTGRES_PASSWORD, SERVICE_API_KEY, GEMINI_API_KEY, TELEGRAM_*
-docker compose up -d          # postgres · n8n · newsfeed-api · taskbot · vaultwarden · homepage · rag-api
+docker compose up -d          # brings up all 12 services
 ```
 
 Each service creates its own database and applies its own schema on first boot.
-Per-service bootstrap (n8n workflow import, feed seeds, Telegram chat id) is in
-the linked READMEs.
+Per-service bootstrap (n8n workflow import, feed seeds, Telegram chat id,
+first-run setup wizards for Uptime Kuma/Actual/AdGuard) is in the linked
+READMEs.
 
 ## 🧪 Development
 
 ```bash
-cd n8n-stack/taskbot          # or newsfeed-api
+cd n8n-stack/taskbot          # or newsfeed-api / rag-api
 python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest -q
 ```
@@ -247,7 +304,11 @@ python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
 ## 📌 About
 
-Personal infrastructure, built as a portfolio piece and run for real. The design
+Personal infrastructure, built as a portfolio piece and run for real — 12
+containers, 3 of them custom FastAPI services backed by 159 passing tests, the
+rest deployed and operated off-the-shelf apps, all reachable only over a
+Tailscale mesh VPN with nothing exposed to the public internet. The design
 docs under [`docs/superpowers/`](docs/superpowers/) capture the full
-brainstorm → spec → plan → build cycle behind each service. Idle footprint is
-~0.7 GB — the 2013 low-power chip handles the whole stack comfortably.
+brainstorm → spec → plan → build cycle behind each custom service. Idle
+footprint is ~1.3 GB across the whole stack — the 2013 low-power chip handles
+it comfortably.
