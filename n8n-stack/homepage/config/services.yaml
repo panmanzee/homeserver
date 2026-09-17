@@ -9,8 +9,8 @@
 
     - Newsfeed:
         icon: si-rss
-        href: http://100.77.47.51:8001/
-        description: RSS → LLM enrichment → Telegram digest
+        href: https://pan-homeserver.tail9ee4c5.ts.net:8450/
+        description: Searchable, filterable news reader — RSS → LLM enrichment
         server: my-docker
         container: newsfeed-api
         siteMonitor: http://newsfeed-api:8000/health

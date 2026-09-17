@@ -15,9 +15,10 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from . import db, enrich, notify
+from . import db, enrich, notify, web
 from . import feeds as feeds_mod
 from . import prices
 from .config import settings
@@ -232,3 +233,38 @@ def news(
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[dict[str, Any]]:
     return db.query_news(since=since, ticker=ticker, tag=tag, limit=limit)
+
+
+# --------------------------------------------------------------------------- #
+# Web frontend — public within the tailnet, no API key (same trust model as
+# rag-api's /ask and taskbot's /api/*: single reader, Tailscale is the
+# perimeter). Separate from /news above, which stays internal/API-key-gated.
+# --------------------------------------------------------------------------- #
+@app.get("/api/articles")
+def api_articles(
+    q: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    importance: str | None = Query(default=None),
+    sentiment: str | None = Query(default=None),
+    ticker: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
+    since: datetime | None = Query(default=None),
+    until: datetime | None = Query(default=None),
+    limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    rows = db.query_articles(
+        q=q, category=category, importance=importance, sentiment=sentiment,
+        ticker=ticker, tag=tag, since=since, until=until, limit=limit, offset=offset,
+    )
+    return {"items": rows[:limit], "has_more": len(rows) > limit}
+
+
+@app.get("/api/facets")
+def api_facets() -> dict[str, Any]:
+    return db.list_facets()
+
+
+@app.get("/", response_class=HTMLResponse)
+def index() -> str:
+    return web.PAGE

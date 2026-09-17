@@ -50,7 +50,7 @@ services:
       DIGEST_MAX_ITEMS: ${DIGEST_MAX_ITEMS:-12}
       DIGEST_BULLETS_PER_ITEM: ${DIGEST_BULLETS_PER_ITEM:-2}
     ports:
-      - "8001:8000"   # host access for manual testing / curl
+      - "127.0.0.1:8001:8000"   # web frontend + manual curl; reached via tailscale serve --https=8450
     depends_on:
       - postgres
 

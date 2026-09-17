@@ -107,7 +107,9 @@ items now); **Telegram digest** 08:00 & 18:00 (everything not yet pushed);
 
 ## API
 
-All endpoints except `/health` require header `X-API-Key: <SERVICE_API_KEY>`.
+All endpoints except `/health` and the web-frontend routes below require
+header `X-API-Key: <SERVICE_API_KEY>` — these are n8n's internal pipeline
+calls.
 
 | Method / path | Body | Purpose |
 |---|---|---|
@@ -117,7 +119,16 @@ All endpoints except `/health` require header `X-API-Key: <SERVICE_API_KEY>`.
 | `POST /prices/refresh` | `{"days":7}` optional | pull EOD prices (Twelve Data) for watchlist ∪ recent-news tickers |
 | `POST /notify/urgent` | — | push `breaking`-rated items not yet sent (called after `/enrich`) |
 | `POST /notify/digest` | — | send one compact Telegram digest of everything not yet pushed |
-| `GET /news` | query `since,ticker,tag,limit` | read `v_news_enriched` |
+| `GET /news` | query `since,ticker,tag,limit` | internal read of `v_news_enriched` (API-key gated) |
+
+**Web frontend** (no API key — public within the tailnet, same trust model
+as `rag-api`'s `/ask`):
+
+| Method / path | Query | Purpose |
+|---|---|---|
+| `GET /` | — | the reader page |
+| `GET /api/articles` | `q,category,importance,sentiment,ticker,tag,since,until,limit,offset` | filtered/paginated article list |
+| `GET /api/facets` | — | categories/importances/sentiments/top tags/tickers, for the filter UI |
 
 Manual run:
 

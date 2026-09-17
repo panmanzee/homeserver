@@ -29,7 +29,7 @@ SSH with zero ports exposed to the public internet.
 
 | Service | What it does |
 |---|---|
-| **[`newsfeed-api`](n8n-stack/newsfeed-api/)** | RSS → Postgres → LLM (factual summary + tickers/tags) → EOD prices → Telegram digest |
+| **[`newsfeed-api`](n8n-stack/newsfeed-api/)** | RSS → Postgres → LLM (factual summary + tickers/tags) → EOD prices → Telegram digest, plus a searchable/filterable web reader; Tailscale `:8450` |
 | **[`taskbot`](n8n-stack/taskbot/)** | Plain-language Telegram bot + web app → managed task list + opt-in Google Calendar sync + daily plan/review; Tailscale `:8448` |
 | **[`rag-api`](n8n-stack/rag-api/)** | Ask questions about your own PDFs/notes; hybrid retrieval (pgvector + full-text + RRF) + cited answers; Tailscale `:8444` |
 
@@ -113,6 +113,7 @@ flowchart TB
     TS -. ":8444" .-> RAG
     TS -. ":8443" .-> HP
     TS -. ":8448" .-> TB
+    TS -. ":8450" .-> NF
     TS -. ":8445 · :8447 · :8446 · :8449" .-> UK & AB & AG & KJ
     TS -. "HTTPS" .-> VW
 ```
@@ -138,6 +139,17 @@ flowchart LR
 - **Cost + freshness bounded** — articles older than 48 h that were never enriched are dropped (marked sent, no LLM call).
 - **Idempotent** — every stage is safe to re-run: `ON CONFLICT DO NOTHING` on ingest, a `tg_notified_at` mark guards against double-sends.
 - **Data model** — `feeds`, `news_items`, `enrichments`, `tickers`, `stock_prices`, and a `v_news_enriched` view.
+
+**Web reader** (`GET /`, Tailscale `:8450`) — Telegram is good for a nudge,
+bad for browsing history, so the archive of enriched articles (7k+ and
+growing) is also a searchable, filterable single-page app: free-text search
+over titles/tags, quick filters for category/importance/sentiment/ticker,
+importance-colored rows so `breaking` visibly outranks `routine`, grouped by
+day, "Load more" paging. `GET /api/articles` + `GET /api/facets` back it —
+public within the tailnet, unauthenticated (same trust model as `rag-api`);
+the pipeline's internal endpoints (`/ingest/rss`, `/enrich`, `/notify/*`)
+keep their `X-API-Key` gate, untouched. Design:
+[`docs/superpowers/specs/2026-09-17-newsfeed-web-frontend-design.md`](n8n-stack/docs/superpowers/specs/2026-09-17-newsfeed-web-frontend-design.md).
 
 📄 Full docs: **[`n8n-stack/README.md`](n8n-stack/README.md)**
 

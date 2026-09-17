@@ -358,6 +358,111 @@ def query_news(
         return conn.execute(sql, params).fetchall()
 
 
+def query_articles(
+    q: str | None = None,
+    category: str | None = None,
+    importance: str | None = None,
+    sentiment: str | None = None,
+    ticker: str | None = None,
+    tag: str | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    limit: int = 30,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """Browsable article list for the web frontend: only enriched items,
+    newest first, with the fuller filter set `/api/articles` exposes.
+
+    Fetches `limit + 1` rows so the caller can tell whether there's another
+    page without a separate COUNT(*) — trim the extra row before returning
+    to the client.
+    """
+    sql = "SELECT * FROM v_news_enriched WHERE enrichment_status = 'ok'"
+    params: list[Any] = []
+    if q:
+        sql += (
+            " AND (title ILIKE %s"
+            " OR EXISTS (SELECT 1 FROM unnest(tags) t WHERE t ILIKE %s))"
+        )
+        needle = f"%{q}%"
+        params.extend([needle, needle])
+    if category:
+        sql += " AND feed_category = %s"
+        params.append(category)
+    if importance:
+        sql += " AND importance = %s"
+        params.append(importance)
+    if sentiment:
+        sql += " AND sentiment = %s"
+        params.append(sentiment)
+    if ticker:
+        sql += " AND %s = ANY(tickers)"
+        params.append(ticker.upper())
+    if tag:
+        sql += " AND %s = ANY(tags)"
+        params.append(tag.lower())
+    if since is not None:
+        sql += " AND published_at >= %s"
+        params.append(since)
+    if until is not None:
+        sql += " AND published_at <= %s"
+        params.append(until)
+    sql += " ORDER BY published_at DESC NULLS LAST, id DESC LIMIT %s OFFSET %s"
+    params.extend([min(limit, 100) + 1, offset])
+    with pool.connection() as conn:
+        return conn.execute(sql, params).fetchall()
+
+
+_IMPORTANCE_VALUES = ["breaking", "notable", "routine"]
+_SENTIMENT_VALUES = ["positive", "negative", "neutral"]
+
+
+def list_facets(top_n: int = 40) -> dict[str, Any]:
+    """Values to populate the web frontend's filter chips/dropdowns.
+
+    `categories` comes from `feeds` (small, fixed); importance/sentiment are
+    the schema's own CHECK-constrained enums (hardcoded here, not queried —
+    they're closed sets); `top_tags`/`tickers` are computed live from
+    enriched articles — cheap at this row count, no caching needed.
+    """
+    with pool.connection() as conn:
+        categories = [
+            r["category"]
+            for r in conn.execute(
+                "SELECT DISTINCT category FROM feeds WHERE category IS NOT NULL ORDER BY category"
+            ).fetchall()
+        ]
+        top_tags = conn.execute(
+            """
+            SELECT nt.tag, count(*) AS count
+            FROM news_tags nt
+            JOIN enrichments e ON e.news_item_id = nt.news_item_id AND e.status = 'ok'
+            GROUP BY nt.tag
+            ORDER BY count DESC, nt.tag
+            LIMIT %s
+            """,
+            (top_n,),
+        ).fetchall()
+        tickers = conn.execute(
+            """
+            SELECT nk.symbol, count(*) AS count
+            FROM news_tickers nk
+            JOIN enrichments e ON e.news_item_id = nk.news_item_id AND e.status = 'ok'
+            GROUP BY nk.symbol
+            ORDER BY count DESC, nk.symbol
+            LIMIT %s
+            """,
+            (top_n,),
+        ).fetchall()
+    return {
+        "categories": categories,
+        "importances": _IMPORTANCE_VALUES,
+        "sentiments": _SENTIMENT_VALUES,
+        "top_tags": top_tags,
+        "tickers": tickers,
+    }
+
+
 __all__ = [
     "pool",
     "ping",
@@ -374,5 +479,7 @@ __all__ = [
     "select_unnotified",
     "mark_notified",
     "query_news",
+    "query_articles",
+    "list_facets",
     "psycopg",
 ]
