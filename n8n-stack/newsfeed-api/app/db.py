@@ -463,6 +463,55 @@ def list_facets(top_n: int = 40) -> dict[str, Any]:
     }
 
 
+# --------------------------------------------------------------------------- #
+# Today's Picks — signals only, no scoring (that's app/picks.py, DB-free)
+# --------------------------------------------------------------------------- #
+def recent_price_changes() -> list[dict[str, Any]]:
+    """Latest + previous close per symbol, only for symbols with >=2 days of
+    price history (a fresh listing with one data point has no change to
+    compute)."""
+    with pool.connection() as conn:
+        return conn.execute(
+            """
+            WITH ranked AS (
+                SELECT symbol, close,
+                       row_number() OVER (PARTITION BY symbol ORDER BY date DESC) AS rn
+                FROM stock_prices
+            )
+            SELECT r.symbol, t.name,
+                   max(r.close) FILTER (WHERE r.rn = 1) AS latest_close,
+                   max(r.close) FILTER (WHERE r.rn = 2) AS prev_close
+            FROM ranked r
+            JOIN tickers t ON t.symbol = r.symbol
+            WHERE r.rn <= 2
+            GROUP BY r.symbol, t.name
+            HAVING count(*) = 2
+            """
+        ).fetchall()
+
+
+def recent_ticker_news(days: int = 7) -> list[dict[str, Any]]:
+    """One row per (article, ticker) pair in the last `days` days — only
+    successfully-enriched articles (a ticker link can outlive a later failed
+    re-enrichment; `save_enrichment_error` doesn't touch `news_tickers`)."""
+    with pool.connection() as conn:
+        return conn.execute(
+            """
+            SELECT nt.symbol, e.importance, e.sentiment,
+                   COALESCE(g.tags, ARRAY[]::text[]) AS tags
+            FROM news_tickers nt
+            JOIN news_items ni ON ni.id = nt.news_item_id
+            JOIN enrichments e ON e.news_item_id = ni.id AND e.status = 'ok'
+            LEFT JOIN LATERAL (
+                SELECT array_agg(ng.tag) AS tags
+                FROM news_tags ng WHERE ng.news_item_id = ni.id
+            ) g ON true
+            WHERE ni.published_at >= now() - make_interval(days => %s)
+            """,
+            (days,),
+        ).fetchall()
+
+
 __all__ = [
     "pool",
     "ping",
@@ -481,5 +530,7 @@ __all__ = [
     "query_news",
     "query_articles",
     "list_facets",
+    "recent_price_changes",
+    "recent_ticker_news",
     "psycopg",
 ]

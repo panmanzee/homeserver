@@ -155,3 +155,70 @@ def test_existing_ingest_endpoint_still_requires_api_key(client):
     c, db_mod = client
     r = c.post("/ingest/rss", json={"feed_ids": []})
     assert r.status_code == 401
+
+
+def _seed_pick(db_mod, symbol, *, prev_close, latest_close, importance="breaking",
+                sentiment="positive", tags=("ai-chips",), name="Some Co"):
+    with db_mod.pool.connection() as conn:
+        conn.execute(
+            "INSERT INTO tickers (symbol, name) VALUES (%s, %s) "
+            "ON CONFLICT (symbol) DO UPDATE SET name = EXCLUDED.name",
+            (symbol, name),
+        )
+        conn.execute(
+            "INSERT INTO stock_prices (symbol, date, close) VALUES (%s, CURRENT_DATE - 1, %s) "
+            "ON CONFLICT (symbol, date) DO UPDATE SET close = EXCLUDED.close",
+            (symbol, prev_close),
+        )
+        conn.execute(
+            "INSERT INTO stock_prices (symbol, date, close) VALUES (%s, CURRENT_DATE, %s) "
+            "ON CONFLICT (symbol, date) DO UPDATE SET close = EXCLUDED.close",
+            (symbol, latest_close),
+        )
+    _seed(db_mod, title=f"{symbol} news", importance=importance, sentiment=sentiment, tags=list(tags))
+    # link the ticker to the article we just seeded (most recent by id)
+    with db_mod.pool.connection() as conn:
+        news_id = conn.execute(
+            "SELECT id FROM news_items ORDER BY id DESC LIMIT 1"
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT INTO news_tickers (news_item_id, symbol) VALUES (%s, %s) "
+            "ON CONFLICT DO NOTHING",
+            (news_id, symbol),
+        )
+
+
+def test_picks_endpoint_no_api_key_and_shape(client):
+    c, db_mod = client
+    r = c.get("/api/picks")
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body.keys()) == {"generated_at", "tech", "healthcare", "other"}
+
+
+def test_picks_endpoint_qualifying_ticker_appears_in_tech(client):
+    c, db_mod = client
+    _seed_pick(db_mod, "NVDA", prev_close=100, latest_close=110, name="NVIDIA")
+    body = c.get("/api/picks").json()
+    symbols = [p["symbol"] for p in body["tech"]]
+    assert "NVDA" in symbols
+
+
+def test_picks_endpoint_price_change_is_a_json_number_not_a_string(client):
+    # stock_prices.close is Postgres `numeric` -> psycopg hands back Decimal;
+    # regression guard for it leaking through as a JSON string.
+    c, db_mod = client
+    _seed_pick(db_mod, "NVDA", prev_close=100, latest_close=110, name="NVIDIA")
+    body = c.get("/api/picks").json()
+    pick = next(p for p in body["tech"] if p["symbol"] == "NVDA")
+    assert isinstance(pick["price_change_pct"], float)
+    assert pick["price_change_pct"] == 10.0
+    assert isinstance(pick["score"], float)
+
+
+def test_picks_endpoint_excludes_falling_price(client):
+    c, db_mod = client
+    _seed_pick(db_mod, "DOWN", prev_close=100, latest_close=90)
+    body = c.get("/api/picks").json()
+    all_symbols = {p["symbol"] for bucket in (body["tech"], body["healthcare"], body["other"]) for p in bucket}
+    assert "DOWN" not in all_symbols

@@ -100,53 +100,101 @@ PAGE = """<!doctype html>
   @media (max-width: 480px) {
     .more-grid { grid-template-columns: 1fr; }
   }
+
+  .tabbar { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+  .tabs { display: flex; gap: .3rem; }
+  .tab {
+    padding: .35rem .7rem; font: inherit; font-size: .85rem; color: var(--text-dim);
+    background: transparent; border: 1px solid var(--rule); border-radius: 999px; cursor: pointer;
+  }
+  .tab[aria-pressed="true"] { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+
+  .disclaimer { color: var(--text-dim); font-size: .8rem; margin: 1.1rem 0 0; }
+  .picksSection { margin-top: 1.4rem; }
+  .picksSection h2 { font-size: .85rem; color: var(--text-dim); font-weight: 600; margin: 0 0 .5rem; }
+  .pickRow {
+    display: flex; align-items: center; gap: .6rem; background: var(--surface);
+    border: 1px solid var(--rule); border-radius: 8px; padding: .6rem .8rem; margin-bottom: .5rem;
+  }
+  .pickSymbol { font-weight: 600; min-width: 4.2rem; }
+  .pickName {
+    color: var(--text-dim); font-size: .82rem; flex: 1; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .pickChange { font-weight: 600; font-size: .85rem; color: var(--positive); }
+  .pickMeta { font-size: .75rem; color: var(--text-dim); white-space: nowrap; }
+  .pickEmpty { color: var(--text-dim); font-size: .85rem; padding: .3rem 0; }
 </style></head>
 <body>
 <div class="wrap">
   <header>
-    <h1>Newsfeed</h1>
-    <input class="search" id="q" type="search" placeholder="Search titles and topics — try &quot;thailand&quot;">
-    <div class="chips" id="catChips"></div>
-    <details class="more">
-      <summary>+ filters</summary>
-      <div class="more-grid">
-        <div>
-          <label for="importance">Importance</label>
-          <select id="importance">
-            <option value="">Any</option>
-            <option value="breaking">Breaking</option>
-            <option value="notable">Notable</option>
-            <option value="routine">Routine</option>
-          </select>
-        </div>
-        <div>
-          <label for="sentiment">Sentiment</label>
-          <select id="sentiment">
-            <option value="">Any</option>
-            <option value="positive">Positive</option>
-            <option value="negative">Negative</option>
-            <option value="neutral">Neutral</option>
-          </select>
-        </div>
-        <div>
-          <label for="ticker">Ticker</label>
-          <input id="ticker" placeholder="e.g. AAPL">
-        </div>
-        <div>
-          <label for="tag">Tag</label>
-          <input id="tag" placeholder="e.g. ai-chips" list="tagList">
-          <datalist id="tagList"></datalist>
-        </div>
+    <div class="tabbar">
+      <h1>Newsfeed</h1>
+      <div class="tabs">
+        <button type="button" class="tab" id="tabNews" aria-pressed="true">News</button>
+        <button type="button" class="tab" id="tabPicks" aria-pressed="false">Today's Picks</button>
       </div>
-    </details>
+    </div>
+    <div id="newsControls">
+      <input class="search" id="q" type="search" placeholder="Search titles and topics — try &quot;thailand&quot;">
+      <div class="chips" id="catChips"></div>
+      <details class="more">
+        <summary>+ filters</summary>
+        <div class="more-grid">
+          <div>
+            <label for="importance">Importance</label>
+            <select id="importance">
+              <option value="">Any</option>
+              <option value="breaking">Breaking</option>
+              <option value="notable">Notable</option>
+              <option value="routine">Routine</option>
+            </select>
+          </div>
+          <div>
+            <label for="sentiment">Sentiment</label>
+            <select id="sentiment">
+              <option value="">Any</option>
+              <option value="positive">Positive</option>
+              <option value="negative">Negative</option>
+              <option value="neutral">Neutral</option>
+            </select>
+          </div>
+          <div>
+            <label for="ticker">Ticker</label>
+            <input id="ticker" placeholder="e.g. AAPL">
+          </div>
+          <div>
+            <label for="tag">Tag</label>
+            <input id="tag" placeholder="e.g. ai-chips" list="tagList">
+            <datalist id="tagList"></datalist>
+          </div>
+        </div>
+      </details>
+    </div>
   </header>
 
   <div id="stream"></div>
   <button class="loadmore" id="loadmore" hidden>Load more</button>
+
+  <div id="picksView" hidden>
+    <p class="disclaimer">Ranked by recent price movement and news attention — not financial advice.</p>
+    <section class="picksSection">
+      <h2>Tech</h2>
+      <div id="picksTech" class="pickList"></div>
+    </section>
+    <section class="picksSection">
+      <h2>Healthcare</h2>
+      <div id="picksHealthcare" class="pickList"></div>
+    </section>
+    <section class="picksSection">
+      <h2>Other</h2>
+      <div id="picksOther" class="pickList"></div>
+    </section>
+  </div>
 </div>
 
 <script>
-const state = { offset: 0, limit: 30, items: [] };
+const state = { offset: 0, limit: 30, items: [], hasMore: false };
 const els = {
   q: document.getElementById('q'),
   catChips: document.getElementById('catChips'),
@@ -157,6 +205,10 @@ const els = {
   tagList: document.getElementById('tagList'),
   stream: document.getElementById('stream'),
   loadmore: document.getElementById('loadmore'),
+  tabNews: document.getElementById('tabNews'),
+  tabPicks: document.getElementById('tabPicks'),
+  newsControls: document.getElementById('newsControls'),
+  picksView: document.getElementById('picksView'),
 };
 let activeCategory = '';
 
@@ -279,8 +331,73 @@ async function load({ reset }) {
   state.items = reset ? body.items : state.items.concat(body.items);
   render(body.items, { append: !reset });
   state.offset = offset + body.items.length;
+  state.hasMore = body.has_more;
   els.loadmore.hidden = !body.has_more;
   els.loadmore.disabled = false;
+}
+
+// --- Today's Picks: a transparent screener (price momentum + news
+// attention/sentiment), not an LLM opinion — see app/picks.py. ---
+let picksLoaded = false;
+
+function pickRow(p) {
+  const row = document.createElement('div');
+  row.className = 'pickRow';
+
+  const sym = document.createElement('span');
+  sym.className = 'pickSymbol'; sym.textContent = p.symbol;
+  row.appendChild(sym);
+
+  const name = document.createElement('span');
+  name.className = 'pickName'; name.textContent = p.name || '';
+  row.appendChild(name);
+
+  const change = document.createElement('span');
+  change.className = 'pickChange';
+  change.textContent = '+' + p.price_change_pct.toFixed(1) + '%';
+  row.appendChild(change);
+
+  const meta = document.createElement('span');
+  meta.className = 'pickMeta';
+  const articleWord = p.article_count === 1 ? 'article' : 'articles';
+  const tags = (p.matched_tags || []).slice(0, 3).join(', ');
+  meta.textContent = p.article_count + ' ' + articleWord + (tags ? ' · ' + tags : '');
+  row.appendChild(meta);
+
+  return row;
+}
+
+function renderPickList(containerId, items) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  if (!items.length) {
+    const empty = document.createElement('div');
+    empty.className = 'pickEmpty';
+    empty.textContent = 'No tickers clear the bar right now.';
+    el.appendChild(empty);
+    return;
+  }
+  items.forEach(p => el.appendChild(pickRow(p)));
+}
+
+async function loadPicks() {
+  const res = await fetch('/api/picks');
+  const body = await res.json();
+  renderPickList('picksTech', body.tech);
+  renderPickList('picksHealthcare', body.healthcare);
+  renderPickList('picksOther', body.other);
+  picksLoaded = true;
+}
+
+function showTab(tab) {
+  const isNews = tab === 'news';
+  els.tabNews.setAttribute('aria-pressed', String(isNews));
+  els.tabPicks.setAttribute('aria-pressed', String(!isNews));
+  els.newsControls.hidden = !isNews;
+  els.stream.hidden = !isNews;
+  els.loadmore.hidden = !isNews || !state.hasMore;
+  els.picksView.hidden = isNews;
+  if (!isNews && !picksLoaded) loadPicks();
 }
 
 let debounceTimer;
@@ -329,6 +446,8 @@ els.q.addEventListener('input', scheduleReload);
 [els.importance, els.sentiment].forEach(el => el.addEventListener('change', () => load({ reset: true })));
 [els.ticker, els.tag].forEach(el => el.addEventListener('input', scheduleReload));
 els.loadmore.addEventListener('click', () => load({ reset: false }));
+els.tabNews.addEventListener('click', () => showTab('news'));
+els.tabPicks.addEventListener('click', () => showTab('picks'));
 
 initFacets();
 load({ reset: true });

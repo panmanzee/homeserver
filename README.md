@@ -151,6 +151,17 @@ the pipeline's internal endpoints (`/ingest/rss`, `/enrich`, `/notify/*`)
 keep their `X-API-Key` gate, untouched. Design:
 [`docs/superpowers/specs/2026-09-17-newsfeed-web-frontend-design.md`](n8n-stack/docs/superpowers/specs/2026-09-17-newsfeed-web-frontend-design.md).
 
+**Today's Picks** — a second tab on the same page: a tech-first (also
+healthcare + other) daily stock screener. Deliberately **not** an LLM
+recommendation — `enrich.py`'s prompt has a standing rule against price
+predictions or buy/sell advice, so this reuses that same principle: every
+pick is a transparent, auditable combination of two signals already in
+Postgres (`stock_prices` momentum + `news_tickers`/`enrichments` attention
+and sentiment), with a visible formula and one honest disclaimer line — not
+an opinion. A ticker only appears if its price rose **and** its recent news
+is net-positive. `GET /api/picks`. Design:
+[`docs/superpowers/specs/2026-09-21-todays-picks-design.md`](n8n-stack/docs/superpowers/specs/2026-09-21-todays-picks-design.md).
+
 📄 Full docs: **[`n8n-stack/README.md`](n8n-stack/README.md)**
 
 ---

@@ -129,6 +129,7 @@ as `rag-api`'s `/ask`):
 | `GET /` | — | the reader page |
 | `GET /api/articles` | `q,category,importance,sentiment,ticker,tag,since,until,limit,offset` | filtered/paginated article list |
 | `GET /api/facets` | — | categories/importances/sentiments/top tags/tickers, for the filter UI |
+| `GET /api/picks` | — | Today's Picks — transparent stock screener (price momentum + news attention/sentiment), not LLM advice; see `docs/superpowers/specs/2026-09-21-todays-picks-design.md` |
 
 Manual run:
 

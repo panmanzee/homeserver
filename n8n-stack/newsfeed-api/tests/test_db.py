@@ -202,3 +202,65 @@ def test_list_facets_excludes_unenriched_tags(db):
     _seed_article(db, title="not enriched", enriched=False, tags=[])
     facets = db.list_facets()
     assert facets["top_tags"] == []
+
+
+# --------------------------------------------------------------------------- #
+# recent_price_changes / recent_ticker_news (Today's Picks)
+# --------------------------------------------------------------------------- #
+def _seed_ticker(db, symbol, name="Some Co"):
+    with db.pool.connection() as conn:
+        conn.execute(
+            "INSERT INTO tickers (symbol, name) VALUES (%s, %s) "
+            "ON CONFLICT (symbol) DO UPDATE SET name = EXCLUDED.name",
+            (symbol, name),
+        )
+
+
+def _seed_price(db, symbol, date, close):
+    with db.pool.connection() as conn:
+        conn.execute(
+            "INSERT INTO stock_prices (symbol, date, close) VALUES (%s, %s, %s) "
+            "ON CONFLICT (symbol, date) DO UPDATE SET close = EXCLUDED.close",
+            (symbol, date, close),
+        )
+
+
+def test_recent_price_changes_returns_latest_and_prev_close(db):
+    _seed_ticker(db, "NVDA", "NVIDIA Corporation")
+    _seed_price(db, "NVDA", "2026-09-17", 100)
+    _seed_price(db, "NVDA", "2026-09-18", 110)
+    rows = {r["symbol"]: r for r in db.recent_price_changes()}
+    assert rows["NVDA"]["latest_close"] == 110
+    assert rows["NVDA"]["prev_close"] == 100
+    assert rows["NVDA"]["name"] == "NVIDIA Corporation"
+
+
+def test_recent_price_changes_excludes_single_day_history(db):
+    _seed_ticker(db, "ONLYONE")
+    _seed_price(db, "ONLYONE", "2026-09-18", 50)
+    symbols = {r["symbol"] for r in db.recent_price_changes()}
+    assert "ONLYONE" not in symbols
+
+
+def test_recent_ticker_news_respects_days_window(db):
+    recent = _seed_article(
+        db, title="recent", tickers=["AAPL"],
+        published_at=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    old = _seed_article(
+        db, title="old", tickers=["AAPL"],
+        published_at=datetime.now(timezone.utc) - timedelta(days=30),
+    )
+    rows = db.recent_ticker_news(days=7)
+    assert any(r["symbol"] == "AAPL" for r in rows)
+    # only the recent article's ticker link should show up in a 7-day window
+    assert len(rows) == 1
+
+
+def test_recent_ticker_news_excludes_failed_enrichment(db):
+    # A ticker link can outlive a re-enrichment that later failed (save_enrichment_error
+    # doesn't touch news_tickers) — the query must still filter on status='ok'.
+    news_id = _seed_article(db, title="will fail", tickers=["AAPL"])
+    db.save_enrichment_error(news_id, model="test", prompt_version="v4", error="boom")
+    rows = db.recent_ticker_news(days=7)
+    assert rows == []

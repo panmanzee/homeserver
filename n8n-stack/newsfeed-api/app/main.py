@@ -11,14 +11,14 @@ import logging
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from . import db, enrich, notify, web
+from . import db, enrich, notify, picks, web
 from . import feeds as feeds_mod
 from . import prices
 from .config import settings
@@ -263,6 +263,16 @@ def api_articles(
 @app.get("/api/facets")
 def api_facets() -> dict[str, Any]:
     return db.list_facets()
+
+
+@app.get("/api/picks")
+def api_picks() -> dict[str, Any]:
+    """Today's Picks — a transparent screener, not LLM advice (see
+    app/picks.py's module docstring and the design spec)."""
+    price_rows = db.recent_price_changes()
+    ticker_news = db.recent_ticker_news(days=7)
+    sections = picks.build_picks(price_rows, ticker_news)
+    return {"generated_at": datetime.now(timezone.utc).isoformat(), **sections}
 
 
 @app.get("/", response_class=HTMLResponse)
