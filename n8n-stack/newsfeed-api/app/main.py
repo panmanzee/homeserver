@@ -11,7 +11,7 @@ import logging
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -265,6 +265,39 @@ def api_facets() -> dict[str, Any]:
     return db.list_facets()
 
 
+_FUNDAMENTALS_TTL = timedelta(hours=24)
+_FUNDAMENTALS_FIELDS = (
+    "trailing_pe", "forward_pe", "price_to_book", "market_cap",
+    "profit_margin_pct", "revenue_growth_pct", "analyst_target_price",
+    "analyst_rating",
+)
+
+
+def _attach_fundamentals(sections: dict[str, list[dict[str, Any]]]) -> None:
+    """Best-effort, cached, and only for tickers that already cleared the
+    price+news gate (a handful, not the full universe) — see the design
+    spec's §3 on why fundamentals must never block or slow down a pick.
+    Mutates each pick's "fundamentals" field in place."""
+    all_picks = [p for bucket in sections.values() for p in bucket]
+    if not all_picks:
+        return
+    symbols = [p["symbol"] for p in all_picks]
+    cached = db.get_cached_fundamentals(symbols)
+    now = datetime.now(timezone.utc)
+
+    for symbol in symbols:
+        row = cached.get(symbol)
+        is_stale = row is None or (now - row["fetched_at"]) > _FUNDAMENTALS_TTL
+        if is_stale:
+            fresh = prices.fetch_fundamentals(symbol) or {f: None for f in _FUNDAMENTALS_FIELDS}
+            db.upsert_fundamentals(symbol, fresh)
+            cached[symbol] = fresh
+
+    for p in all_picks:
+        row = cached.get(p["symbol"]) or {}
+        p["fundamentals"] = {f: row.get(f) for f in _FUNDAMENTALS_FIELDS}
+
+
 @app.get("/api/picks")
 def api_picks() -> dict[str, Any]:
     """Today's Picks — a transparent screener, not LLM advice (see
@@ -272,6 +305,7 @@ def api_picks() -> dict[str, Any]:
     price_rows = db.recent_price_changes()
     ticker_news = db.recent_ticker_news(days=7)
     sections = picks.build_picks(price_rows, ticker_news)
+    _attach_fundamentals(sections)
     return {"generated_at": datetime.now(timezone.utc).isoformat(), **sections}
 
 

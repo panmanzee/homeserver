@@ -22,7 +22,7 @@ def db(monkeypatch):
     db_mod.pool.open()
     with db_mod.pool.connection() as c:
         c.execute(
-            "TRUNCATE feeds, news_items, enrichments, tickers, news_tickers, "
+            "TRUNCATE feeds, news_items, enrichments, tickers, news_tickers, fundamentals, "
             "news_tags, stock_prices RESTART IDENTITY CASCADE"
         )
     yield db_mod
@@ -264,3 +264,101 @@ def test_recent_ticker_news_excludes_failed_enrichment(db):
     db.save_enrichment_error(news_id, model="test", prompt_version="v4", error="boom")
     rows = db.recent_ticker_news(days=7)
     assert rows == []
+
+
+def test_recent_ticker_news_includes_event_type(db):
+    _seed_article(db, title="partnership news", tickers=["AAPL"])
+    rows = db.recent_ticker_news(days=7)
+    assert rows[0]["event_type"] == "other"  # _seed_article's default
+
+
+def test_recent_price_changes_as_of_excludes_later_dates(db):
+    # Backtest replay: as_of=2026-09-01 must not see the 09-05 close at all,
+    # so a symbol whose only 2 rows straddle that cutoff has no "as of" pair.
+    _seed_ticker(db, "NVDA")
+    _seed_price(db, "NVDA", "2026-08-30", 90)
+    _seed_price(db, "NVDA", "2026-09-01", 100)
+    _seed_price(db, "NVDA", "2026-09-05", 110)
+
+    as_of_rows = {r["symbol"]: r for r in db.recent_price_changes(as_of="2026-09-01")}
+    assert as_of_rows["NVDA"]["latest_close"] == 100
+    assert as_of_rows["NVDA"]["prev_close"] == 90
+
+    today_rows = {r["symbol"]: r for r in db.recent_price_changes()}
+    assert today_rows["NVDA"]["latest_close"] == 110
+    assert today_rows["NVDA"]["prev_close"] == 100
+
+
+def test_recent_ticker_news_as_of_excludes_later_articles(db):
+    _seed_article(
+        db, title="before cutoff", tickers=["AAPL"],
+        published_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+    )
+    _seed_article(
+        db, title="after cutoff", tickers=["AAPL"],
+        published_at=datetime(2026, 9, 10, tzinfo=timezone.utc),
+    )
+    rows = db.recent_ticker_news(days=30, as_of="2026-09-05")
+    assert len(rows) == 1
+
+
+# --------------------------------------------------------------------------- #
+# fundamentals cache
+# --------------------------------------------------------------------------- #
+def test_get_cached_fundamentals_empty_when_no_rows(db):
+    _seed_ticker(db, "NVDA")
+    assert db.get_cached_fundamentals(["NVDA"]) == {}
+
+
+def test_upsert_then_get_cached_fundamentals_roundtrip(db):
+    _seed_ticker(db, "NVDA")
+    db.upsert_fundamentals("NVDA", {
+        "trailing_pe": 30.2, "forward_pe": 25.3, "price_to_book": 12.1,
+        "market_cap": 123456789, "profit_margin_pct": 35.1,
+        "revenue_growth_pct": 12.2, "analyst_target_price": 250.0,
+        "analyst_rating": "buy",
+    })
+    cached = db.get_cached_fundamentals(["NVDA"])
+    assert cached["NVDA"]["trailing_pe"] == 30.2
+    assert cached["NVDA"]["analyst_rating"] == "buy"
+    assert "fetched_at" in cached["NVDA"]
+
+
+def test_upsert_fundamentals_with_none_values_still_caches(db):
+    # A symbol Yahoo has nothing on is still worth caching as "checked,
+    # nothing found" so it isn't refetched every request.
+    _seed_ticker(db, "NOINFO")
+    db.upsert_fundamentals("NOINFO", {
+        "trailing_pe": None, "forward_pe": None, "price_to_book": None,
+        "market_cap": None, "profit_margin_pct": None,
+        "revenue_growth_pct": None, "analyst_target_price": None,
+        "analyst_rating": None,
+    })
+    cached = db.get_cached_fundamentals(["NOINFO"])
+    assert "NOINFO" in cached
+    assert cached["NOINFO"]["trailing_pe"] is None
+
+
+def test_upsert_fundamentals_overwrites_on_refresh(db):
+    _seed_ticker(db, "NVDA")
+    db.upsert_fundamentals("NVDA", {"trailing_pe": 30.0, "forward_pe": None,
+        "price_to_book": None, "market_cap": None, "profit_margin_pct": None,
+        "revenue_growth_pct": None, "analyst_target_price": None, "analyst_rating": None})
+    db.upsert_fundamentals("NVDA", {"trailing_pe": 32.5, "forward_pe": None,
+        "price_to_book": None, "market_cap": None, "profit_margin_pct": None,
+        "revenue_growth_pct": None, "analyst_target_price": None, "analyst_rating": None})
+    cached = db.get_cached_fundamentals(["NVDA"])
+    assert cached["NVDA"]["trailing_pe"] == 32.5
+
+
+def test_get_cached_fundamentals_filters_by_symbol_list(db):
+    _seed_ticker(db, "A")
+    _seed_ticker(db, "B")
+    db.upsert_fundamentals("A", {"trailing_pe": 1, "forward_pe": None, "price_to_book": None,
+        "market_cap": None, "profit_margin_pct": None, "revenue_growth_pct": None,
+        "analyst_target_price": None, "analyst_rating": None})
+    db.upsert_fundamentals("B", {"trailing_pe": 2, "forward_pe": None, "price_to_book": None,
+        "market_cap": None, "profit_margin_pct": None, "revenue_growth_pct": None,
+        "analyst_target_price": None, "analyst_rating": None})
+    cached = db.get_cached_fundamentals(["A"])
+    assert set(cached.keys()) == {"A"}

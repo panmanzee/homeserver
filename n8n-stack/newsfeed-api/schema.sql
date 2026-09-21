@@ -103,6 +103,24 @@ CREATE TABLE IF NOT EXISTS stock_prices (
 
 CREATE INDEX IF NOT EXISTS stock_prices_symbol_date_idx ON stock_prices (symbol, date DESC);
 
+-- Today's Picks context — P/E and valuation snapshot, cached (Yahoo is
+-- best-effort/rate-limited; see app/prices.py's fetch_fundamentals). Fetched
+-- lazily, only for tickers that already qualify for a pick, not the whole
+-- universe. A row can have all-NULL value columns if Yahoo never returned
+-- one (still cached, so a bad symbol isn't retried every request).
+CREATE TABLE IF NOT EXISTS fundamentals (
+    symbol               text PRIMARY KEY REFERENCES tickers(symbol) ON DELETE CASCADE,
+    trailing_pe          numeric,
+    forward_pe           numeric,
+    price_to_book        numeric,
+    market_cap           numeric,
+    profit_margin_pct    numeric,
+    revenue_growth_pct   numeric,
+    analyst_target_price numeric,
+    analyst_rating       text,
+    fetched_at           timestamptz NOT NULL DEFAULT now()
+);
+
 -- Dropped + recreated (not CREATE OR REPLACE) so column order can change on upgrade.
 DROP VIEW IF EXISTS v_news_enriched;
 CREATE VIEW v_news_enriched AS

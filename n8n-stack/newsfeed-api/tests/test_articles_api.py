@@ -27,10 +27,17 @@ def client(monkeypatch):
     # objects and break `pytest.raises(...)` isinstance checks elsewhere.
     from app import main as main_mod
 
+    # Today's Picks fetches fundamentals best-effort via a real Yahoo call
+    # (app/prices.py's fetch_fundamentals) — never hit the network in tests,
+    # same as every other external call in this suite. Individual tests can
+    # override this with their own monkeypatch to exercise the fetch/cache
+    # path deterministically.
+    monkeypatch.setattr(main_mod.prices, "fetch_fundamentals", lambda symbol: None)
+
     db_mod.pool.open()
     with db_mod.pool.connection() as c:
         c.execute(
-            "TRUNCATE feeds, news_items, enrichments, tickers, news_tickers, "
+            "TRUNCATE feeds, news_items, enrichments, tickers, news_tickers, fundamentals, "
             "news_tags, stock_prices RESTART IDENTITY CASCADE"
         )
 
@@ -222,3 +229,40 @@ def test_picks_endpoint_excludes_falling_price(client):
     body = c.get("/api/picks").json()
     all_symbols = {p["symbol"] for bucket in (body["tech"], body["healthcare"], body["other"]) for p in bucket}
     assert "DOWN" not in all_symbols
+
+
+def test_picks_endpoint_fetches_and_caches_fundamentals_for_qualifying_ticker(client, monkeypatch):
+    from app import main as main_mod
+
+    c, db_mod = client
+    _seed_pick(db_mod, "NVDA", prev_close=100, latest_close=110, name="NVIDIA")
+    calls = []
+
+    def fake_fetch(symbol):
+        calls.append(symbol)
+        return {"trailing_pe": 30.2, "forward_pe": 25.3, "price_to_book": None,
+                "market_cap": None, "profit_margin_pct": None,
+                "revenue_growth_pct": None, "analyst_target_price": None,
+                "analyst_rating": "buy"}
+
+    monkeypatch.setattr(main_mod.prices, "fetch_fundamentals", fake_fetch)
+
+    body = c.get("/api/picks").json()
+    pick = next(p for p in body["tech"] if p["symbol"] == "NVDA")
+    assert pick["fundamentals"]["trailing_pe"] == 30.2
+    assert pick["fundamentals"]["analyst_rating"] == "buy"
+    assert calls == ["NVDA"]  # fetched once
+
+    # Second request within the TTL must use the cache, not fetch again.
+    c.get("/api/picks")
+    assert calls == ["NVDA"]
+
+
+def test_picks_endpoint_fundamentals_none_when_fetch_fails(client):
+    c, db_mod = client
+    _seed_pick(db_mod, "NVDA", prev_close=100, latest_close=110, name="NVIDIA")
+    # client fixture's default fetch_fundamentals stub returns None
+    body = c.get("/api/picks").json()
+    pick = next(p for p in body["tech"] if p["symbol"] == "NVDA")
+    assert pick["fundamentals"]["trailing_pe"] is None
+    assert pick["fundamentals"]["analyst_rating"] is None

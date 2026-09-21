@@ -6,7 +6,7 @@ handlers (app/main.py); this module only reads and writes rows.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import psycopg
@@ -466,17 +466,23 @@ def list_facets(top_n: int = 40) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Today's Picks — signals only, no scoring (that's app/picks.py, DB-free)
 # --------------------------------------------------------------------------- #
-def recent_price_changes() -> list[dict[str, Any]]:
+def recent_price_changes(as_of: str | date | None = None) -> list[dict[str, Any]]:
     """Latest + previous close per symbol, only for symbols with >=2 days of
     price history (a fresh listing with one data point has no change to
-    compute)."""
+    compute).
+
+    `as_of`: replay this as of a past date (no rows after it are seen) — used
+    by the backtest script to avoid lookahead. `None` (default) is today's
+    live behaviour, unchanged."""
+    where_clause = "WHERE date <= %(as_of)s::date" if as_of else ""
     with pool.connection() as conn:
         return conn.execute(
-            """
+            f"""
             WITH ranked AS (
                 SELECT symbol, close,
                        row_number() OVER (PARTITION BY symbol ORDER BY date DESC) AS rn
                 FROM stock_prices
+                {where_clause}
             )
             SELECT r.symbol, t.name,
                    max(r.close) FILTER (WHERE r.rn = 1) AS latest_close,
@@ -486,18 +492,25 @@ def recent_price_changes() -> list[dict[str, Any]]:
             WHERE r.rn <= 2
             GROUP BY r.symbol, t.name
             HAVING count(*) = 2
-            """
+            """,
+            {"as_of": as_of},
         ).fetchall()
 
 
-def recent_ticker_news(days: int = 7) -> list[dict[str, Any]]:
-    """One row per (article, ticker) pair in the last `days` days — only
-    successfully-enriched articles (a ticker link can outlive a later failed
-    re-enrichment; `save_enrichment_error` doesn't touch `news_tickers`)."""
+def recent_ticker_news(days: int = 7, as_of: str | date | None = None) -> list[dict[str, Any]]:
+    """One row per (article, ticker) pair in the `days`-day window ending at
+    `as_of` (default: now) — only successfully-enriched articles (a ticker
+    link can outlive a later failed re-enrichment; `save_enrichment_error`
+    doesn't touch `news_tickers`).
+
+    `as_of`: replay this as of a past date, for the backtest script — no
+    article published after `as_of` is seen. `None` (default) is today's
+    live behaviour, unchanged."""
+    reference = f"{as_of} 23:59:59" if as_of else "now"
     with pool.connection() as conn:
         return conn.execute(
             """
-            SELECT nt.symbol, e.importance, e.sentiment,
+            SELECT nt.symbol, e.importance, e.sentiment, e.event_type,
                    COALESCE(g.tags, ARRAY[]::text[]) AS tags
             FROM news_tickers nt
             JOIN news_items ni ON ni.id = nt.news_item_id
@@ -506,10 +519,60 @@ def recent_ticker_news(days: int = 7) -> list[dict[str, Any]]:
                 SELECT array_agg(ng.tag) AS tags
                 FROM news_tags ng WHERE ng.news_item_id = ni.id
             ) g ON true
-            WHERE ni.published_at >= now() - make_interval(days => %s)
+            WHERE ni.published_at >= %(reference)s::timestamptz - make_interval(days => %(days)s)
+              AND ni.published_at <= %(reference)s::timestamptz
             """,
-            (days,),
+            {"reference": reference, "days": days},
         ).fetchall()
+
+
+_FUNDAMENTALS_COLUMNS = (
+    "trailing_pe", "forward_pe", "price_to_book", "market_cap",
+    "profit_margin_pct", "revenue_growth_pct", "analyst_target_price",
+    "analyst_rating",
+)
+_FUNDAMENTALS_NUMERIC_COLUMNS = (
+    "trailing_pe", "forward_pe", "price_to_book", "market_cap",
+    "profit_margin_pct", "revenue_growth_pct", "analyst_target_price",
+)
+
+
+def get_cached_fundamentals(symbols: list[str]) -> dict[str, dict[str, Any]]:
+    """Cached fundamentals for exactly the given symbols — the caller
+    decides freshness (compare `fetched_at`); this just reads the cache."""
+    if not symbols:
+        return {}
+    with pool.connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM fundamentals WHERE symbol = ANY(%s)", (symbols,)
+        ).fetchall()
+    # The `numeric` columns come back as Decimal — cast to float so every
+    # downstream field is a plain JSON number, not a Decimal (same fix as
+    # picks.py's price_change_pct: some JSON encoders render Decimal as a
+    # quoted string instead of a number).
+    for row in rows:
+        for col in _FUNDAMENTALS_NUMERIC_COLUMNS:
+            if row.get(col) is not None:
+                row[col] = float(row[col])
+    return {r["symbol"]: r for r in rows}
+
+
+def upsert_fundamentals(symbol: str, data: dict[str, Any]) -> None:
+    """Cache a fundamentals snapshot (or an all-None one, meaning 'checked,
+    Yahoo had nothing' — still worth caching so it isn't refetched every
+    request)."""
+    cols = _FUNDAMENTALS_COLUMNS
+    with pool.connection() as conn:
+        conn.execute(
+            f"""
+            INSERT INTO fundamentals (symbol, {", ".join(cols)}, fetched_at)
+            VALUES (%(symbol)s, {", ".join(f"%({c})s" for c in cols)}, now())
+            ON CONFLICT (symbol) DO UPDATE SET
+                {", ".join(f"{c} = EXCLUDED.{c}" for c in cols)},
+                fetched_at = now()
+            """,
+            {"symbol": symbol, **{c: data.get(c) for c in cols}},
+        )
 
 
 __all__ = [
@@ -532,5 +595,7 @@ __all__ = [
     "list_facets",
     "recent_price_changes",
     "recent_ticker_news",
+    "get_cached_fundamentals",
+    "upsert_fundamentals",
     "psycopg",
 ]

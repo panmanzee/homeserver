@@ -55,10 +55,23 @@ def build_picks(
     """`price_rows`: [{symbol, name, latest_close, prev_close}, ...] (only
     symbols with >=2 days of history — see `db.recent_price_changes`).
     `ticker_news`: one row per (article, ticker) pair in the recent window —
-    [{symbol, importance, sentiment, tags}, ...] (see `db.recent_ticker_news`).
+    [{symbol, importance, sentiment, event_type, tags}, ...] (see
+    `db.recent_ticker_news`).
 
     A ticker appears only if its price rose AND its recent news is net
     positive — "good price, good with news," not a softened approximation.
+
+    `event_type_counts` on each pick (e.g. `{"partnership": 2, "guidance": 1}`)
+    surfaces what kind of company news is behind the pick — earnings,
+    guidance, product, m&a, partnership, etc. (the existing `event_type`
+    classification from `enrich.py`) — descriptive context about the
+    company's recent/forward-looking activity, not a new generated opinion
+    about it.
+
+    `fundamentals` is always `None` here — this module is deliberately
+    DB-free and does no network I/O; the caller (`main.py`) fills it in
+    per-symbol for the small set of tickers that actually qualify (see the
+    design spec's §3 on why that's fetched lazily, not for the whole universe).
     """
     news_agg: dict[str, dict[str, Any]] = {}
     for row in ticker_news:
@@ -70,6 +83,7 @@ def build_picks(
                 "tags": set(),
                 "article_count": 0,
                 "sentiment_counts": {"positive": 0, "negative": 0, "neutral": 0},
+                "event_type_counts": {},
             },
         )
         weight = IMPORTANCE_WEIGHT.get(row.get("importance"), 1)
@@ -80,6 +94,9 @@ def build_picks(
         sentiment = row.get("sentiment")
         if sentiment in a["sentiment_counts"]:
             a["sentiment_counts"][sentiment] += 1
+        event_type = row.get("event_type")
+        if event_type:
+            a["event_type_counts"][event_type] = a["event_type_counts"].get(event_type, 0) + 1
 
     candidates: list[dict[str, Any]] = []
     for price_row in price_rows:
@@ -109,8 +126,10 @@ def build_picks(
                 "news_score": news["news_score"],
                 "article_count": news["article_count"],
                 "sentiment_counts": news["sentiment_counts"],
+                "event_type_counts": news["event_type_counts"],
                 "matched_tags": sorted(news["tags"])[:6],
                 "score": round(price_change_pct + news["news_score"], 2),
+                "fundamentals": None,
             }
         )
 

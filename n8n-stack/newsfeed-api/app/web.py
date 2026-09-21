@@ -113,9 +113,10 @@ PAGE = """<!doctype html>
   .picksSection { margin-top: 1.4rem; }
   .picksSection h2 { font-size: .85rem; color: var(--text-dim); font-weight: 600; margin: 0 0 .5rem; }
   .pickRow {
-    display: flex; align-items: center; gap: .6rem; background: var(--surface);
+    display: flex; flex-direction: column; gap: .3rem; background: var(--surface);
     border: 1px solid var(--rule); border-radius: 8px; padding: .6rem .8rem; margin-bottom: .5rem;
   }
+  .pickTop { display: flex; align-items: center; gap: .6rem; }
   .pickSymbol { font-weight: 600; min-width: 4.2rem; }
   .pickName {
     color: var(--text-dim); font-size: .82rem; flex: 1; overflow: hidden;
@@ -123,6 +124,7 @@ PAGE = """<!doctype html>
   }
   .pickChange { font-weight: 600; font-size: .85rem; color: var(--positive); }
   .pickMeta { font-size: .75rem; color: var(--text-dim); white-space: nowrap; }
+  .pickSub { font-size: .75rem; color: var(--text-dim); }
   .pickEmpty { color: var(--text-dim); font-size: .85rem; padding: .3rem 0; }
 </style></head>
 <body>
@@ -340,29 +342,81 @@ async function load({ reset }) {
 // attention/sentiment), not an LLM opinion — see app/picks.py. ---
 let picksLoaded = false;
 
+function formatMarketCap(v) {
+  if (v == null) return null;
+  if (v >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
+  if (v >= 1e9) return '$' + (v / 1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return '$' + (v / 1e6).toFixed(0) + 'M';
+  return '$' + v.toFixed(0);
+}
+
+function valuationText(f) {
+  if (!f) return null;
+  const parts = [];
+  if (f.trailing_pe != null) parts.push('P/E ' + f.trailing_pe.toFixed(1));
+  else if (f.forward_pe != null) parts.push('Fwd P/E ' + f.forward_pe.toFixed(1));
+  const cap = formatMarketCap(f.market_cap);
+  if (cap) parts.push(cap + ' cap');
+  if (f.revenue_growth_pct != null) {
+    const sign = f.revenue_growth_pct >= 0 ? '+' : '';
+    parts.push('rev ' + sign + f.revenue_growth_pct.toFixed(0) + '%');
+  }
+  if (f.analyst_rating) {
+    let s = 'Wall St.: ' + f.analyst_rating;
+    if (f.analyst_target_price != null) s += ' (target $' + f.analyst_target_price.toFixed(0) + ')';
+    parts.push(s);
+  }
+  return parts.length ? parts.join(' · ') : null;
+}
+
+function eventTypesText(counts) {
+  if (!counts) return null;
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) return null;
+  return 'Recent: ' + entries.map(([type, n]) => type + (n > 1 ? ' ×' + n : '')).join(', ');
+}
+
 function pickRow(p) {
   const row = document.createElement('div');
   row.className = 'pickRow';
 
+  const top = document.createElement('div');
+  top.className = 'pickTop';
+
   const sym = document.createElement('span');
   sym.className = 'pickSymbol'; sym.textContent = p.symbol;
-  row.appendChild(sym);
+  top.appendChild(sym);
 
   const name = document.createElement('span');
   name.className = 'pickName'; name.textContent = p.name || '';
-  row.appendChild(name);
+  top.appendChild(name);
 
   const change = document.createElement('span');
   change.className = 'pickChange';
   change.textContent = '+' + p.price_change_pct.toFixed(1) + '%';
-  row.appendChild(change);
+  top.appendChild(change);
+  row.appendChild(top);
 
-  const meta = document.createElement('span');
+  const meta = document.createElement('div');
   meta.className = 'pickMeta';
   const articleWord = p.article_count === 1 ? 'article' : 'articles';
   const tags = (p.matched_tags || []).slice(0, 3).join(', ');
   meta.textContent = p.article_count + ' ' + articleWord + (tags ? ' · ' + tags : '');
   row.appendChild(meta);
+
+  const valuation = valuationText(p.fundamentals);
+  if (valuation) {
+    const sub = document.createElement('div');
+    sub.className = 'pickSub'; sub.textContent = valuation;
+    row.appendChild(sub);
+  }
+
+  const events = eventTypesText(p.event_type_counts);
+  if (events) {
+    const sub = document.createElement('div');
+    sub.className = 'pickSub'; sub.textContent = events;
+    row.appendChild(sub);
+  }
 
   return row;
 }

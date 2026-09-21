@@ -161,6 +161,23 @@ and sentiment), with a visible formula and one honest disclaimer line — not
 an opinion. A ticker only appears if its price rose **and** its recent news
 is net-positive. `GET /api/picks`. Design:
 [`docs/superpowers/specs/2026-09-21-todays-picks-design.md`](n8n-stack/docs/superpowers/specs/2026-09-21-todays-picks-design.md).
+Each pick also carries P/E and other valuation data (best-effort, Yahoo —
+`prices.fetch_fundamentals`, cached; TwelveData's fundamentals endpoint is
+paywalled on the free tier and Yahoo's unauthenticated one is genuinely
+rate-limited, both confirmed live) and a plain count of the company's
+recent news by type (earnings, guidance, product, partnership, ...) —
+context, never folded into the ranking score. Design:
+[`docs/superpowers/specs/2026-09-21-picks-accuracy-improvements-design.md`](n8n-stack/docs/superpowers/specs/2026-09-21-picks-accuracy-improvements-design.md).
+
+**Backtested 2026-09-21** (`scripts/backtest_picks.py`, replays the exact
+screener day-by-day with no lookahead): over 14 days / 30 `(day, pick)`
+pairs with a 5-trading-day forward window, picks averaged **-1.15%**
+forward return vs. **-0.72%** for an equal-weight benchmark of every
+ticker with price data — picks did *not* outperform in this sample (37%
+win rate vs. 40% for the benchmark). Reported as measured, not tuned
+toward a better number — see the spec's §2 for why. Sample is small (~38
+trading days of price history exist at all); this is a direction check,
+not proof either way.
 
 📄 Full docs: **[`n8n-stack/README.md`](n8n-stack/README.md)**
 

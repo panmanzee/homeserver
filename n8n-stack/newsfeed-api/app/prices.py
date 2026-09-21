@@ -220,3 +220,67 @@ def fetch_prices(symbol: str, days: int) -> list[dict[str, Any]]:
     except KeyError:
         raise PriceProviderError(f"unknown PRICE_PROVIDER: {settings.price_provider!r}")
     return provider(symbol, days)
+
+
+# --------------------------------------------------------------------------- #
+# Fundamentals (P/E, market cap, analyst consensus) — Today's Picks context.
+#
+# TwelveData's /statistics endpoint (tested live) is paywalled on the free
+# tier ("available exclusively with pro/ultra/venture/enterprise plans").
+# Yahoo's unauthenticated quoteSummary is the only $0 option, and it is
+# genuinely rate-limited (confirmed live, alongside the existing price
+# fallback above hitting the same 429s at the same moment) — so this is
+# best-effort by design, not a bug to fix: `fetch_fundamentals` NEVER raises,
+# it returns `None` on any failure. Callers must treat a `None` as "not
+# available right now," not as an error to surface.
+# --------------------------------------------------------------------------- #
+_YF_FUNDAMENTALS_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
+
+
+def _raw(section: dict[str, Any], key: str) -> Any:
+    value = section.get(key)
+    return value.get("raw") if isinstance(value, dict) else None
+
+
+def _pct(value: float | None) -> float | None:
+    return round(value * 100, 2) if value is not None else None
+
+
+def parse_yahoo_fundamentals_json(payload: dict[str, Any]) -> dict[str, Any] | None:
+    qs = payload.get("quoteSummary") or {}
+    if qs.get("error"):
+        return None
+    results = qs.get("result") or []
+    if not results:
+        return None
+    result = results[0]
+    stats = result.get("defaultKeyStatistics") or {}
+    summary = result.get("summaryDetail") or {}
+    fin = result.get("financialData") or {}
+    return {
+        "trailing_pe": _raw(summary, "trailingPE"),
+        "forward_pe": _raw(stats, "forwardPE"),
+        "price_to_book": _raw(stats, "priceToBook"),
+        "market_cap": _raw(summary, "marketCap"),
+        "profit_margin_pct": _pct(_raw(fin, "profitMargins")),
+        "revenue_growth_pct": _pct(_raw(fin, "revenueGrowth")),
+        "analyst_target_price": _raw(fin, "targetMeanPrice"),
+        "analyst_rating": fin.get("recommendationKey"),
+    }
+
+
+def fetch_fundamentals(symbol: str) -> dict[str, Any] | None:
+    """Best-effort P/E + valuation snapshot. Returns `None` on ANY failure —
+    non-200, timeout, malformed payload — never raises. See module docstring
+    above for why Yahoo (best-effort) is the only option today."""
+    try:
+        client = _yf_get_session()
+        resp = client.get(
+            _YF_FUNDAMENTALS_URL.format(symbol=symbol),
+            params={"modules": "defaultKeyStatistics,summaryDetail,financialData"},
+        )
+        if resp.status_code != 200:
+            return None
+        return parse_yahoo_fundamentals_json(resp.json())
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        return None

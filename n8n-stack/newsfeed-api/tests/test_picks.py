@@ -5,8 +5,11 @@ def _price_row(symbol, latest, prev, name=None):
     return {"symbol": symbol, "name": name, "latest_close": latest, "prev_close": prev}
 
 
-def _news_row(symbol, importance="routine", sentiment="neutral", tags=None):
-    return {"symbol": symbol, "importance": importance, "sentiment": sentiment, "tags": tags or []}
+def _news_row(symbol, importance="routine", sentiment="neutral", tags=None, event_type=None):
+    return {
+        "symbol": symbol, "importance": importance, "sentiment": sentiment,
+        "tags": tags or [], "event_type": event_type,
+    }
 
 
 def test_classify_sector_tech():
@@ -52,8 +55,8 @@ def test_ticker_with_no_price_data_excluded_even_with_strong_news():
 def test_qualifying_ticker_appears_with_expected_fields():
     price_rows = [_price_row("NVDA", latest=110, prev=100, name="NVIDIA Corporation")]
     news = [
-        _news_row("NVDA", importance="breaking", sentiment="positive", tags=["ai-chips"]),
-        _news_row("NVDA", importance="routine", sentiment="positive", tags=["semiconductors"]),
+        _news_row("NVDA", importance="breaking", sentiment="positive", tags=["ai-chips"], event_type="product"),
+        _news_row("NVDA", importance="routine", sentiment="positive", tags=["semiconductors"], event_type="partnership"),
     ]
     sections = picks.build_picks(price_rows, news)
     assert len(sections["tech"]) == 1
@@ -64,8 +67,10 @@ def test_qualifying_ticker_appears_with_expected_fields():
     assert item["news_score"] == 3 * 1 + 1 * 1  # breaking+positive, routine+positive
     assert item["article_count"] == 2
     assert item["sentiment_counts"] == {"positive": 2, "negative": 0, "neutral": 0}
+    assert item["event_type_counts"] == {"product": 1, "partnership": 1}
     assert set(item["matched_tags"]) == {"ai-chips", "semiconductors"}
     assert item["score"] == item["price_change_pct"] + item["news_score"]
+    assert item["fundamentals"] is None  # main.py fills this in per-symbol, not build_picks
 
 
 def test_ranking_is_by_score_descending():
