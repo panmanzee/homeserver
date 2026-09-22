@@ -1,0 +1,21 @@
+services:
+  needle3:
+    build: .
+    container_name: needle3-server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - NEEDLE_TELEMETRY=0
+      - DO_NOT_TRACK=1
+      - NEEDLE_MODEL_ID=needle-3
+      - NEEDLE_CACHE_DIR=/cache/needle
+      - HF_HOME=/cache/huggingface
+      - NEEDLE_REQUEST_TIMEOUT=600
+      - NEEDLE_MAX_NEW_TOKENS=512
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
