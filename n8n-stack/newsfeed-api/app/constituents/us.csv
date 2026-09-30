@@ -1,0 +1,270 @@
+symbol,name,sector,index_membership
+AAL,American Airlines Group, Inc.,,sp500
+AAOI,Applied Optoelectronics, Inc.,,sp500
+AAPL,Apple Inc.,,sp500
+ABBV,AbbVie Inc.,,sp500
+ABNB,Airbnb, Inc. - Class A,,sp500
+ABT,Abbott Laboratories,,sp500
+ACHR,Archer Aviation Inc. Class A,,sp500
+ADBE,Adobe Inc.,,sp500
+ADI,Analog Devices, Inc.,,sp500
+ADP,Automatic Data Processing, Inc.,,sp500
+ADSK,Autodesk, Inc.,,sp500
+AEP,American Electric Power Company, Inc.,,sp500
+AFRM,Affirm Holdings, Inc. - Class A,,sp500
+AHR,American Healthcare REIT, Inc.,,sp500
+ALAB,Astera Labs, Inc.,,sp500
+ALK,Alaska Air Group, Inc.,,sp500
+ALNY,Alnylam Pharmaceuticals, Inc.,,sp500
+AMAT,Applied Materials, Inc.,,sp500
+AMC,AMC Entertainment Holdings, Inc. Class A,,sp500
+AMD,Advanced Micro Devices, Inc.,,sp500
+AMGN,Amgen Inc.,,sp500
+AMLX,Amylyx Pharmaceuticals, Inc.,,sp500
+AMZN,Amazon.com, Inc.,,sp500
+ANF,Abercrombie & Fitch Company,,sp500
+AON,Aon plc Class A,,sp500
+APP,Applovin Corporation - Class A,,sp500
+ARM,Arm Holdings plc -,,sp500
+ASAN,Asana, Inc. Class A,,sp500
+ASML,ASML Holding N.V. - New York Registry Shares,,sp500
+ASTS,AST SpaceMobile, Inc. - Class A,,sp500
+AVGO,Broadcom Inc.,,sp500
+AXON,Axon Enterprise, Inc.,,sp500
+AZO,AutoZone, Inc.,,sp500
+BA,Boeing Company (The),,sp500
+BABA,Alibaba Group Holding Limited,,sp500
+BAC,Bank of America Corporation,,sp500
+BDRBF,Bombardier Inc.,,sp500
+BF,Brown-Forman Corporation,,sp500
+BIIB,Biogen Inc.,,sp500
+BK,The Bank of New York Mellon Corporation,,sp500
+BKNG,Booking Holdings Inc.,,sp500
+BKR,Baker Hughes Company,,sp500
+BRK.A,Berkshire Hathaway Inc.,,sp500
+BRK.B,Berkshire Hathaway Inc. New,,sp500
+BTC,Grayscale Bitcoin Mini Trust (BTC),,sp500
+BYDDF,BYD Company Limited,,sp500
+C,Citigroup, Inc.,,sp500
+C6L,Singapore Airlines Limited,,sp500
+CAH,Cardinal Health, Inc.,,sp500
+CASY,Caseys General Stores, Inc.,,sp500
+CAT,Caterpillar, Inc.,,sp500
+CATO,Cato Corporation (The) Class A,,sp500
+CBRS,Cerebras Systems Inc. - Class A,,sp500
+CCEP,Coca-Cola Europacific Partners plc -,,sp500
+CDNS,Cadence Design Systems, Inc.,,sp500
+CEG,Constellation Energy Corporation,,sp500
+CENUA,Century Aluminum Company,,sp500
+CHWY,Chewy, Inc. Class A,,sp500
+CIEN,Ciena Corporation,,sp500
+CLF,Cleveland-Cliffs Inc.,,sp500
+CMCSA,Comcast Corporation - Class A,,sp500
+CMG,Chipotle Mexican Grill, Inc.,,sp500
+COIN,Coinbase Global, Inc. - Class A,,sp500
+COP,ConocoPhillips,,sp500
+COST,Costco Wholesale Corporation,,sp500
+CPB,The Campbell's Company,,sp500
+CPRT,Copart, Inc.,,sp500
+CRM,Salesforce, Inc.,,sp500
+CRWD,CrowdStrike Holdings, Inc. - Class A,,sp500
+CRWV,CoreWeave, Inc. - Class A,,sp500
+CSCO,Cisco Systems, Inc.,,sp500
+CSX,CSX Corporation,,sp500
+CTAS,Cintas Corporation,,sp500
+CVS,CVS Health Corporation,,sp500
+CVX,Chevron Corporation,,sp500
+DAL,Delta Air Lines, Inc.,,sp500
+DASH,DoorDash, Inc.,,sp500
+DDOG,Datadog, Inc. - Class A,,sp500
+DELL,Dell Technologies Inc. Class C,,sp500
+DGRO,iShares Core Dividend Growth ETF,,sp500
+DIS,Walt Disney Company (The),,sp500
+DIVO,Amplify CWP Enhanced Dividend Income ETF,,sp500
+DKNG,DraftKings Inc. - Class A,,sp500
+DLTR,Dollar Tree, Inc.,,sp500
+DOCU,DocuSign, Inc.,,sp500
+DOW,Dow Inc.,,sp500
+DT,Dynatrace, Inc.,,sp500
+DUK,Duke Energy Corporation (Holding Company),,sp500
+DXCM,DexCom, Inc.,,sp500
+EAT,Brinker International, Inc.,,sp500
+EPD,Enterprise Products Partners L.P.,,sp500
+ET,Energy Transfer LP Common Units,,sp500
+ETR,Entergy Corporation,,sp500
+EXC,Exelon Corporation,,sp500
+EXE,Expand Energy Corporation,,sp500
+FANG,Diamondback Energy, Inc.,,sp500
+FAST,Fastenal Company,,sp500
+FCX,Freeport-McMoRan, Inc.,,sp500
+FER,Ferrovial N.V. -,,sp500
+FITB,Fifth Third Bancorp,,sp500
+FIVE,Five Below, Inc.,,sp500
+FLUT,Flutter Entertainment plc,,sp500
+FRO,Frontline Plc,,sp500
+FTNT,Fortinet, Inc.,,sp500
+FUBO,FuboTV Inc. Class A,,sp500
+FUL,H. B. Fuller Company,,sp500
+GAP,Gap, Inc. (The),,sp500
+GE,GE Aerospace,,sp500
+GEHC,GE HealthCare Technologies Inc.,,sp500
+GELYY,Geely Automobile Holdings,,sp500
+GEV,GE Vernova Inc.,,sp500
+GILD,Gilead Sciences, Inc.,,sp500
+GIS,General Mills, Inc.,,sp500
+GLW,Corning Incorporated,,sp500
+GNRC,Generac Holdlings Inc.,,sp500
+GOOG,Alphabet Inc. - Class C Capital Stock,,sp500
+GOOGL,Alphabet Inc. - Class A,,sp500
+GRND,Grindr Inc.,,sp500
+HD,Home Depot, Inc. (The),,sp500
+HDFCBANK,HDFC Bank Limited,,sp500
+HE,Hawaiian Electric Industries, Inc.,,sp500
+HMC,Honda Motor Company, Ltd.,,sp500
+HON,Honeywell International Inc.,,sp500
+HONA,Honeywell Aerospace Inc.,,sp500
+HOOD,Robinhood Markets, Inc. - Class A,,sp500
+HPE,Hewlett Packard Enterprise Company,,sp500
+HSY,The Hershey Company,,sp500
+HUM,Humana Inc.,,sp500
+IBKR,Interactive Brokers Group, Inc. - Class A,,sp500
+IDXX,IDEXX Laboratories, Inc.,,sp500
+INCY,Incyte Corporation,,sp500
+INOD,Innodata Inc.,,sp500
+INTC,Intel Corporation,,sp500
+INTU,Intuit Inc.,,sp500
+IONQ,IonQ, Inc.,,sp500
+IONS,Ionis Pharmaceuticals, Inc.,,sp500
+ISRG,Intuitive Surgical, Inc.,,sp500
+IVV,iShares Core S&P 500 ETF,,sp500
+JEPQ,JPMorgan Nasdaq Equity Premium Income ETF,,sp500
+JPM,JP Morgan Chase & Co.,,sp500
+KBH,KB Home,,sp500
+KDP,Keurig Dr Pepper Inc.,,sp500
+KLAC,KLA Corporation,,sp500
+KMB,Kimberly-Clark Corporation,,sp500
+KO,Coca-Cola Company (The),,sp500
+KSS,Kohl's Corporation,,sp500
+LEN,Lennar Corporation Class A,,sp500
+LIGHT,Signify N.V.,,sp500
+LIN,Linde plc -,,sp500
+LITE,Lumentum Holdings Inc.,,sp500
+LLY,Eli Lilly and Company,,sp500
+LOW,Lowe's Companies, Inc.,,sp500
+LRCX,Lam Research Corporation,,sp500
+LULU,lululemon athletica inc.,,sp500
+LUV,Southwest Airlines Company,,sp500
+MAIN,Main Street Capital Corporation,,sp500
+MAR,Marriott International - Class A,,sp500
+MCHP,Microchip Technology Incorporated,,sp500
+MDLZ,Mondelez International, Inc. - Class A,,sp500
+MDT,Medtronic plc.,,sp500
+MELI,MercadoLibre, Inc.,,sp500
+META,Meta Platforms, Inc. - Class A,,sp500
+MNSO,MINISO Group Holding Limited,,sp500
+MNST,Monster Beverage Corporation,,sp500
+MPWR,Monolithic Power Systems, Inc.,,sp500
+MRK,Merck & Company, Inc.,,sp500
+MRNA,Moderna, Inc.,,sp500
+MRVL,Marvell Technology, Inc.,,sp500
+MS,Morgan Stanley,,sp500
+MSFT,Microsoft Corporation,,sp500
+MSTR,Strategy Inc - Class A,,sp500
+MU,Micron Technology, Inc.,,sp500
+NAMS,NewAmsterdam Pharma Company N.V. -,,sp500
+NBIS,Nebius Group N.V. - Class A,,sp500
+NEM,Newmont Corporation,,sp500
+NFLX,Netflix, Inc.,,sp500
+NIO,NIO Inc.,,sp500
+NKE,Nike, Inc.,,sp500
+NOK,Nokia Corporation Sponsored,,sp500
+NSANY,Nissan Motor Co., Ltd.,,sp500
+NTAP,NetApp, Inc.,,sp500
+NUE,Nucor Corporation,,sp500
+NVDA,NVIDIA Corporation,,sp500
+NVO,Novo Nordisk A/S,,sp500
+NVS,Novartis AG,,sp500
+NXPI,NXP Semiconductors N.V.,,sp500
+ODFL,Old Dominion Freight Line, Inc.,,sp500
+ORCL,Oracle Corporation,,sp500
+ORLY,O'Reilly Automotive, Inc.,,sp500
+OXY,Occidental Petroleum Corporation,,sp500
+PAM,Pampa Energia S.A.,,sp500
+PANW,Palo Alto Networks, Inc.,,sp500
+PARA,Banzai International, Inc. - Class A,,sp500
+PATH,UiPath, Inc. Class A,,sp500
+PAYX,Paychex, Inc.,,sp500
+PCAR,PACCAR Inc.,,sp500
+PDD,PDD Holdings Inc. -,,sp500
+PEP,PepsiCo, Inc.,,sp500
+PFE,Pfizer, Inc.,,sp500
+PINS,Pinterest, Inc. Class A,,sp500
+PL,Planet Labs PBC Class A,,sp500
+PLTR,Palantir Technologies Inc. - Class A,,sp500
+PVH,PVH Corp.,,sp500
+PWR,Quanta Services, Inc.,,sp500
+PYPL,PayPal Holdings, Inc.,,sp500
+QCOM,QUALCOMM Incorporated,,sp500
+QTWO,Q2 Holdings, Inc.,,sp500
+REGN,Regeneron Pharmaceuticals, Inc.,,sp500
+RGTI,Rigetti Computing, Inc.  - Common stock,,sp500
+RKLB,Rocket Lab Corporation,,sp500
+ROP,Roper Technologies, Inc.,,sp500
+ROST,Ross Stores, Inc.,,sp500
+SAIC,Science Applications International Corporation,,sp500
+SBUX,Starbucks Corporation,,sp500
+SHOP,Shopify Inc. - Class A Subordinate Voting Shares,,sp500
+SLB,SLB Limited Common Shares,,sp500
+SLX,VanEck Steel ETF,,sp500
+SNDK,Sandisk Corporation,,sp500
+SNOW,Snowflake Inc.,,sp500
+SNPS,Synopsys, Inc.,,sp500
+SO,Southern Company (The),,sp500
+SOL,Solana,,sp500
+SPCX,Space Exploration Technologies Corp. - Class A,,sp500
+SPY,State Street SPDR S&P 500 ETF Trust,,sp500
+SSL,Sasol Ltd.,,sp500
+STLD,Steel Dynamics, Inc.,,sp500
+STM,STMicroelectronics N.V.,,sp500
+STX,Seagate Technology Holdings PLC -,,sp500
+TBN,Tamboran Resources Corporation Common stock,,sp500
+TER,Teradyne, Inc.,,sp500
+TFC,Truist Financial Corporation,,sp500
+TGT,Target Corporation,,sp500
+TJX,TJX Companies, Inc. (The),,sp500
+TMUS,T-Mobile US, Inc.,,sp500
+TRI,Thomson Reuters Corp - Common Shares,,sp500
+TSLA,Tesla, Inc.,,sp500
+TSM,Taiwan Semiconductor Manufacturing Company Ltd.,,sp500
+TTC,Toro Company (The),,sp500
+TTWO,Take-Two Interactive Software, Inc.,,sp500
+TXN,Texas Instruments Incorporated,,sp500
+UAL,United Airlines Holdings, Inc.,,sp500
+UBER,Uber Technologies, Inc.,,sp500
+USB,U.S. Bancorp,,sp500
+VFS,VinFast Auto Ltd. -,,sp500
+VIG,Vanguard Div Appreciation ETF,,sp500
+VNQ,Vanguard Real Estate ETF,,sp500
+VOO,Vanguard S&P 500 ETF,,sp500
+VRT,Vertiv Holdings, LLC Class A,,sp500
+VRTX,Vertex Pharmaceuticals Incorporated,,sp500
+VST,Vistra Corp.,,sp500
+VSXY,Victorias Secret & Co.,,sp500
+VTR,Ventas, Inc.,,sp500
+WBD,Warner Bros. Discovery, Inc. - Series A,,sp500
+WDAY,Workday, Inc. - Class A,,sp500
+WDC,Western Digital Corporation,,sp500
+WELL,Welltower Inc.,,sp500
+WLFC,Willis Lease Finance Corporation,,sp500
+WMT,Walmart Inc.,,sp500
+WOOF,Petco Health and Wellness Company, Inc. - Class A,,sp500
+XE,X-Energy, Inc. - Class A,,sp500
+XEL,Xcel Energy Inc.,,sp500
+XIACY,Xiaomi Corporation,,sp500
+XLB,State Street Materials Select Sector SPDR ETF,,sp500
+XOM,ExxonMobil Holdings Corporation,,sp500
+XPENG,XPeng Inc.,,sp500
+XYZ,Block, Inc. Class A,,sp500
+YUM,Yum! Brands, Inc.,,sp500
+ZCSH,The Zcash ETF Shares,,sp500
+ZS,Zscaler, Inc.,,sp500

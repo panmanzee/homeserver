@@ -1,0 +1,51 @@
+symbol,name,sector,index_membership
+ADS.DE,Adidas,Consumer Discretionary,eurostoxx50
+ADYEN.AS,Adyen,Financials,eurostoxx50
+AD.AS,Ahold Delhaize,Consumer Staples,eurostoxx50
+AI.PA,Air Liquide,Materials,eurostoxx50
+AIR.PA,Airbus,Industrials,eurostoxx50
+ALV.DE,Allianz,Financials,eurostoxx50
+ABI.BR,Anheuser-Busch InBev,Consumer Staples,eurostoxx50
+ARGX.BR,Argenx,Health Care,eurostoxx50
+ASML.AS,ASML Holding,Information Technology,eurostoxx50
+CS.PA,Axa,Financials,eurostoxx50
+BAS.DE,BASF,Materials,eurostoxx50
+BAYN.DE,Bayer,Health Care,eurostoxx50
+BBVA.MC,BBVA,Financials,eurostoxx50
+SAN.MC,Banco Santander,Financials,eurostoxx50
+BMW.DE,BMW,Consumer Discretionary,eurostoxx50
+BNP.PA,BNP Paribas,Financials,eurostoxx50
+BN.PA,Danone,Consumer Staples,eurostoxx50
+DBK.DE,Deutsche Bank,Financials,eurostoxx50
+DB1.DE,Deutsche Boerse,Financials,eurostoxx50
+DHL.DE,Deutsche Post (DHL Group),Industrials,eurostoxx50
+DTE.DE,Deutsche Telekom,Communication Services,eurostoxx50
+ENEL.MI,Enel,Utilities,eurostoxx50
+ENI.MI,Eni,Energy,eurostoxx50
+EL.PA,EssilorLuxottica,Health Care,eurostoxx50
+RACE.MI,Ferrari,Consumer Discretionary,eurostoxx50
+RMS.PA,Hermes,Consumer Discretionary,eurostoxx50
+IBE.MC,Iberdrola,Utilities,eurostoxx50
+ITX.MC,Inditex,Consumer Discretionary,eurostoxx50
+IFX.DE,Infineon Technologies,Information Technology,eurostoxx50
+INGA.AS,ING Group,Financials,eurostoxx50
+ISP.MI,Intesa Sanpaolo,Financials,eurostoxx50
+OR.PA,L'Oreal,Consumer Staples,eurostoxx50
+MC.PA,LVMH,Consumer Discretionary,eurostoxx50
+MBG.DE,Mercedes-Benz Group,Consumer Discretionary,eurostoxx50
+MUV2.DE,Munich Re,Financials,eurostoxx50
+NDA-FI.HE,Nordea,Financials,eurostoxx50
+PRX.AS,Prosus,Consumer Discretionary,eurostoxx50
+RHM.DE,Rheinmetall,Industrials,eurostoxx50
+SAF.PA,Safran,Industrials,eurostoxx50
+SGO.PA,Saint-Gobain,Industrials,eurostoxx50
+SAN.PA,Sanofi,Health Care,eurostoxx50
+SAP.DE,SAP,Information Technology,eurostoxx50
+SU.PA,Schneider Electric,Industrials,eurostoxx50
+SIE.DE,Siemens,Industrials,eurostoxx50
+ENR.DE,Siemens Energy,Industrials,eurostoxx50
+TTE.PA,TotalEnergies,Energy,eurostoxx50
+DG.PA,Vinci,Industrials,eurostoxx50
+UCG.MI,UniCredit,Financials,eurostoxx50
+VOW.DE,Volkswagen Group,Consumer Discretionary,eurostoxx50
+WKL.AS,Wolters Kluwer,Industrials,eurostoxx50
