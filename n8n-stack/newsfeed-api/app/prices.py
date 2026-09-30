@@ -23,8 +23,8 @@ import httpx
 from .config import settings
 
 _BROWSER_UA = (
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/126.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/126.0.0.0 Safari/537.36"
 )
 
 
@@ -117,11 +117,26 @@ def _twelvedata(symbol: str, days: int) -> list[dict[str, Any]]:
 
 
 # --------------------------------------------------------------------------- #
-# Yahoo Finance (fallback, unauthenticated)
+# Yahoo Finance (default as of 2026-09-30 — unauthenticated, unofficial, but
+# free with no hard daily cap; needed at 680-symbol 5-region scale where
+# TwelveData's 800 credits/day would be exhausted almost immediately).
+# Throttled defensively even though Yahoo publishes no official limit.
 # --------------------------------------------------------------------------- #
 _YF_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 _yf_session: httpx.Client | None = None
 _yf_lock = threading.Lock()
+_yf_rate_lock = threading.Lock()
+_yf_last_call = 0.0
+_YF_MIN_INTERVAL = 0.35  # ~170/min ceiling, well under typical unofficial limits
+
+
+def _yf_throttle() -> None:
+    global _yf_last_call
+    with _yf_rate_lock:
+        wait = _YF_MIN_INTERVAL - (time.monotonic() - _yf_last_call)
+        if wait > 0:
+            time.sleep(wait)
+        _yf_last_call = time.monotonic()
 
 
 def _yf_get_session() -> httpx.Client:
@@ -196,6 +211,7 @@ def parse_yahoo_chart_json(payload: dict[str, Any]) -> list[dict[str, Any]]:
 def _yahoo(symbol: str, days: int) -> list[dict[str, Any]]:
     params = {"range": _yf_range(days), "interval": "1d"}
     for attempt in (1, 2):
+        _yf_throttle()
         client = _yf_get_session()
         resp = client.get(_YF_URL.format(symbol=symbol), params=params)
         if resp.status_code in (401, 403, 429) and attempt == 1:
@@ -223,17 +239,17 @@ def fetch_prices(symbol: str, days: int) -> list[dict[str, Any]]:
 
 
 # --------------------------------------------------------------------------- #
-# Fundamentals (P/E, market cap, analyst consensus) — Today's Picks context.
+# Fundamentals (P/E, market cap, analyst consensus) — Today's Picks + Trading
+# tab context.
 #
-# TwelveData's /statistics endpoint (tested live) is paywalled on the free
-# tier ("available exclusively with pro/ultra/venture/enterprise plans").
-# Yahoo's unauthenticated quoteSummary is the only $0 option, and it is
-# genuinely rate-limited (confirmed live, alongside the existing price
-# fallback above hitting the same 429s at the same moment) — so this is
-# best-effort by design, not a bug to fix: `fetch_fundamentals` NEVER raises,
-# it returns `None` on any failure. Callers must treat a `None` as "not
-# available right now," not as an error to surface.
+# TwelveData's /statistics endpoint is the primary source (confirmed live and
+# working on this account's plan — the earlier "paywalled" note was stale).
+# Yahoo's unauthenticated quoteSummary is kept as a fallback for any symbol
+# TwelveData doesn't have. `fetch_fundamentals` NEVER raises — it returns
+# `None` on any failure from both sources. Callers must treat a `None` as
+# "not available right now," not as an error to surface.
 # --------------------------------------------------------------------------- #
+_TD_STATISTICS_URL = "https://api.twelvedata.com/statistics"
 _YF_FUNDAMENTALS_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
 
 
@@ -244,6 +260,41 @@ def _raw(section: dict[str, Any], key: str) -> Any:
 
 def _pct(value: float | None) -> float | None:
     return round(value * 100, 2) if value is not None else None
+
+
+def parse_twelvedata_statistics_json(payload: dict[str, Any]) -> dict[str, Any] | None:
+    if payload.get("status") == "error" or "statistics" not in payload:
+        return None
+    stats = payload["statistics"]
+    val = stats.get("valuations_metrics") or {}
+    fin = stats.get("financials") or {}
+    return {
+        "trailing_pe": val.get("trailing_pe"),
+        "forward_pe": val.get("forward_pe"),
+        "price_to_book": val.get("price_to_book_mrq"),
+        "market_cap": val.get("market_capitalization"),
+        "profit_margin_pct": _pct(fin.get("profit_margin")),
+        "revenue_growth_pct": _pct(fin.get("income_statement", {}).get("quarterly_revenue_growth")),
+        "analyst_target_price": None,
+        "analyst_rating": None,  # TwelveData's /statistics has no recommendation string
+    }
+
+
+def _fetch_fundamentals_twelvedata(symbol: str) -> dict[str, Any] | None:
+    if not settings.twelvedata_api_key:
+        return None
+    try:
+        _td_throttle()
+        with httpx.Client(timeout=settings.http_timeout) as client:
+            resp = client.get(
+                _TD_STATISTICS_URL,
+                params={"symbol": symbol, "apikey": settings.twelvedata_api_key},
+            )
+        if resp.status_code != 200:
+            return None
+        return parse_twelvedata_statistics_json(resp.json())
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        return None
 
 
 def parse_yahoo_fundamentals_json(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -269,11 +320,9 @@ def parse_yahoo_fundamentals_json(payload: dict[str, Any]) -> dict[str, Any] | N
     }
 
 
-def fetch_fundamentals(symbol: str) -> dict[str, Any] | None:
-    """Best-effort P/E + valuation snapshot. Returns `None` on ANY failure —
-    non-200, timeout, malformed payload — never raises. See module docstring
-    above for why Yahoo (best-effort) is the only option today."""
+def _fetch_fundamentals_yahoo(symbol: str) -> dict[str, Any] | None:
     try:
+        _yf_throttle()
         client = _yf_get_session()
         resp = client.get(
             _YF_FUNDAMENTALS_URL.format(symbol=symbol),
@@ -284,3 +333,15 @@ def fetch_fundamentals(symbol: str) -> dict[str, Any] | None:
         return parse_yahoo_fundamentals_json(resp.json())
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
         return None
+
+
+def fetch_fundamentals(symbol: str) -> dict[str, Any] | None:
+    """Best-effort P/E + valuation snapshot. Tries Yahoo first (primary as of
+    2026-09-30 — no hard daily cap, needed for the 680-symbol 5-region
+    universe), falls back to TwelveData (rate-capped at 800 credits/day, so
+    only used as backup for symbols Yahoo doesn't have). Returns `None` on
+    total failure — non-200, timeout, malformed payload — never raises."""
+    result = _fetch_fundamentals_yahoo(symbol)
+    if result is not None:
+        return result
+    return _fetch_fundamentals_twelvedata(symbol)
