@@ -526,6 +526,28 @@ def recent_ticker_news(days: int = 7, as_of: str | date | None = None) -> list[d
         ).fetchall()
 
 
+def symbol_news(symbol: str, days: int = 14, limit: int = 8) -> list[dict[str, Any]]:
+    """Real recent headlines + sentiment/importance for one symbol, newest
+    first — feeds the Trading tab's AI verdict with actual article context
+    (not just tags). Only successfully-enriched articles, same convention
+    as recent_ticker_news."""
+    with pool.connection() as conn:
+        return conn.execute(
+            """
+            SELECT ni.title, ni.url, ni.published_at,
+                   e.summary, e.sentiment, e.importance, e.event_type
+            FROM news_tickers nt
+            JOIN news_items ni ON ni.id = nt.news_item_id
+            JOIN enrichments e ON e.news_item_id = ni.id AND e.status = 'ok'
+            WHERE nt.symbol = %(symbol)s
+              AND ni.published_at >= now() - make_interval(days => %(days)s)
+            ORDER BY ni.published_at DESC
+            LIMIT %(limit)s
+            """,
+            {"symbol": symbol.upper(), "days": days, "limit": limit},
+        ).fetchall()
+
+
 _FUNDAMENTALS_COLUMNS = (
     "trailing_pe", "forward_pe", "price_to_book", "market_cap",
     "profit_margin_pct", "revenue_growth_pct", "analyst_target_price",
@@ -535,6 +557,36 @@ _FUNDAMENTALS_NUMERIC_COLUMNS = (
     "trailing_pe", "forward_pe", "price_to_book", "market_cap",
     "profit_margin_pct", "revenue_growth_pct", "analyst_target_price",
 )
+
+
+def chart_prices(symbol: str, days: int = 90) -> list[dict[str, Any]]:
+    """OHLCV history for one symbol, oldest first, for candlestick charting.
+    Bounded to `days` of calendar history (not trading days) so callers get
+    a predictable window regardless of how much history actually exists."""
+    with pool.connection() as conn:
+        return conn.execute(
+            """
+            SELECT date, open, high, low, close, volume
+            FROM stock_prices
+            WHERE symbol = %(symbol)s AND date >= (CURRENT_DATE - %(days)s::int)
+            ORDER BY date ASC
+            """,
+            {"symbol": symbol.upper(), "days": days},
+        ).fetchall()
+
+
+def list_available_symbols() -> list[dict[str, Any]]:
+    """All tickers that have at least one price row, for the chart symbol
+    picker/search — cheap distinct query, no join needed beyond tickers.name."""
+    with pool.connection() as conn:
+        return conn.execute(
+            """
+            SELECT DISTINCT t.symbol, t.name
+            FROM tickers t
+            JOIN stock_prices p ON p.symbol = t.symbol
+            ORDER BY t.symbol ASC
+            """
+        ).fetchall()
 
 
 def get_cached_fundamentals(symbols: list[str]) -> dict[str, dict[str, Any]]:
@@ -575,6 +627,206 @@ def upsert_fundamentals(symbol: str, data: dict[str, Any]) -> None:
         )
 
 
+# --------------------------------------------------------------------------- #
+# Multi-region: tickers by region, index quotes, FX, region news, job runs.
+# --------------------------------------------------------------------------- #
+def list_region_tickers(region: str) -> list[dict[str, Any]]:
+    with pool.connection() as conn:
+        return conn.execute(
+            """
+            SELECT symbol, name, sector, currency, index_membership,
+                   COALESCE(price_symbol, symbol) AS price_symbol
+            FROM tickers
+            WHERE region = %s AND is_active = true
+            ORDER BY symbol
+            """,
+            (region,),
+        ).fetchall()
+
+
+def region_ticker_symbols(region: str) -> list[str]:
+    with pool.connection() as conn:
+        rows = conn.execute(
+            "SELECT symbol FROM tickers WHERE region = %s AND is_active = true",
+            (region,),
+        ).fetchall()
+    return [r["symbol"] for r in rows]
+
+
+def upsert_index_quote(region: str, index_symbol: str, index_name: str,
+                        level: float | None, change_pct: float | None,
+                        is_primary: bool = False) -> None:
+    with pool.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO index_quotes (region, index_symbol, index_name, ts, level, change_pct, is_primary)
+            VALUES (%s, %s, %s, now(), %s, %s, %s)
+            """,
+            (region, index_symbol, index_name, level, change_pct, is_primary),
+        )
+
+
+def latest_index_quote(region: str) -> dict[str, Any] | None:
+    with pool.connection() as conn:
+        return conn.execute(
+            """
+            SELECT * FROM index_quotes
+            WHERE region = %s
+            ORDER BY ts DESC LIMIT 1
+            """,
+            (region,),
+        ).fetchone()
+
+
+def latest_index_quotes_all() -> dict[str, dict[str, Any]]:
+    with pool.connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT ON (region) *
+            FROM index_quotes
+            ORDER BY region, ts DESC
+            """
+        ).fetchall()
+    return {r["region"]: r for r in rows}
+
+
+def upsert_fx_rate(pair: str, day: date, rate: float, source: str = "yahoo") -> None:
+    with pool.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO fx_rates (pair, date, rate, source)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (pair, date) DO UPDATE SET rate = EXCLUDED.rate, source = EXCLUDED.source
+            """,
+            (pair, day, rate, source),
+        )
+
+
+def latest_fx_rate(pair: str) -> dict[str, Any] | None:
+    with pool.connection() as conn:
+        return conn.execute(
+            "SELECT * FROM fx_rates WHERE pair = %s ORDER BY date DESC LIMIT 1",
+            (pair,),
+        ).fetchone()
+
+
+def upsert_news_regions(news_item_id: int, regions: list[str]) -> None:
+    if not regions:
+        return
+    with pool.connection() as conn, conn.transaction():
+        with conn.cursor() as cur:
+            for r in regions:
+                cur.execute(
+                    "INSERT INTO news_regions (news_item_id, region) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                    (news_item_id, r),
+                )
+
+
+def backfill_news_regions(limit: int = 500) -> int:
+    """Tag already-enriched articles that have no region rows yet, using
+    ticker-region (authoritative) then keyword fallback. Idempotent -
+    only touches articles with zero existing news_regions rows."""
+    from .market import infer_regions
+
+    with pool.connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT ni.id, ni.title, COALESCE(t.symbols, ARRAY[]::text[]) AS tickers
+            FROM news_items ni
+            JOIN enrichments e ON e.news_item_id = ni.id AND e.status = 'ok'
+            LEFT JOIN LATERAL (
+                SELECT array_agg(nt.symbol) AS symbols
+                FROM news_tickers nt WHERE nt.news_item_id = ni.id
+            ) t ON true
+            WHERE NOT EXISTS (SELECT 1 FROM news_regions nr WHERE nr.news_item_id = ni.id)
+            ORDER BY ni.id DESC
+            LIMIT %s
+            """,
+            (limit,),
+        ).fetchall()
+
+    count = 0
+    for row in rows:
+        regions = infer_regions(row["title"], row["tickers"] or [], None)
+        upsert_news_regions(row["id"], regions)
+        count += 1
+    return count
+
+
+def query_region_articles(
+    region: str,
+    q: str | None = None,
+    importance: str | None = None,
+    sentiment: str | None = None,
+    ticker: str | None = None,
+    tag: str | None = None,
+    since: datetime | None = None,
+    limit: int = 30,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    sql = """
+        SELECT v.* FROM v_news_enriched v
+        JOIN news_regions nr ON nr.news_item_id = v.id
+        WHERE v.enrichment_status = 'ok' AND nr.region = %s
+    """
+    params: list[Any] = [region]
+    if q:
+        sql += " AND v.title ILIKE %s"
+        params.append(f"%{q}%")
+    if importance:
+        sql += " AND v.importance = %s"
+        params.append(importance)
+    if sentiment:
+        sql += " AND v.sentiment = %s"
+        params.append(sentiment)
+    if ticker:
+        sql += " AND %s = ANY(v.tickers)"
+        params.append(ticker.upper())
+    if tag:
+        sql += " AND %s = ANY(v.tags)"
+        params.append(tag.lower())
+    if since is not None:
+        sql += " AND v.published_at >= %s"
+        params.append(since)
+    sql += " ORDER BY v.published_at DESC NULLS LAST, v.id DESC LIMIT %s OFFSET %s"
+    params.extend([min(limit, 100) + 1, offset])
+    with pool.connection() as conn:
+        return conn.execute(sql, params).fetchall()
+
+
+def record_job_start(job: str) -> int:
+    with pool.connection() as conn:
+        row = conn.execute(
+            "INSERT INTO job_runs (job, started_at, status) VALUES (%s, now(), 'running') RETURNING id",
+            (job,),
+        ).fetchone()
+        return row["id"]
+
+
+def record_job_end(run_id: int, status: str, counts: dict[str, Any] | None = None,
+                    errors: list[Any] | None = None) -> None:
+    with pool.connection() as conn:
+        conn.execute(
+            """
+            UPDATE job_runs SET finished_at = now(), status = %s, counts = %s, errors = %s
+            WHERE id = %s
+            """,
+            (status, Jsonb(counts) if counts is not None else None,
+             Jsonb(errors) if errors is not None else None, run_id),
+        )
+
+
+def latest_job_runs() -> list[dict[str, Any]]:
+    with pool.connection() as conn:
+        return conn.execute(
+            """
+            SELECT DISTINCT ON (job) job, started_at, finished_at, status, counts, errors
+            FROM job_runs
+            ORDER BY job, started_at DESC
+            """
+        ).fetchall()
+
+
 __all__ = [
     "pool",
     "ping",
@@ -595,7 +847,23 @@ __all__ = [
     "list_facets",
     "recent_price_changes",
     "recent_ticker_news",
+    "chart_prices",
+    "symbol_news",
+    "list_available_symbols",
     "get_cached_fundamentals",
     "upsert_fundamentals",
+    "list_region_tickers",
+    "region_ticker_symbols",
+    "upsert_index_quote",
+    "latest_index_quote",
+    "latest_index_quotes_all",
+    "upsert_fx_rate",
+    "latest_fx_rate",
+    "upsert_news_regions",
+    "backfill_news_regions",
+    "query_region_articles",
+    "record_job_start",
+    "record_job_end",
+    "latest_job_runs",
     "psycopg",
 ]
