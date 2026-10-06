@@ -50,6 +50,14 @@ Run it: `docker run -d --name cloudhost-portal --network cloudhost-internal --ad
 `COOLIFY_PROJECT_UUID`, `COOLIFY_SERVER_UUID`, `BILLING_URL`, `BASE_DOMAIN`, `COOKIE_SECURE` (1 behind https),
 optional `INVITE_CODE` (empty = open sign-up). Set `INVITE_CODE` before exposing it publicly.
 
+### Public routing (app.pandeploy.dev)
+
+The tunnel's `*.pandeploy.dev` rule matches before a separate `app.pandeploy.dev` rule, so the portal is routed by
+Traefik instead: `/data/coolify/proxy/dynamic/portal.yaml` (Host `app.pandeploy.dev` on entrypoint `https`,
+`tls: {}`, service `http://cloudhost-portal:8100`). Traefik must share a network with the portal:
+`docker network connect coolify cloudhost-portal` — **repeat this whenever the portal container is recreated.**
+The invite code lives only in `/root/.portal_invite` (mode 600) and the container env; run with `COOKIE_SECURE=1`.
+
 ## Run the tests
 
 ```
