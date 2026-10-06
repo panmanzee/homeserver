@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>pandeploy: a small home-hosted platform for web apps</title>
+<meta name="description" content="pandeploy hosts small web apps on a single home server. Each app gets an HTTPS address at name.pandeploy.dev. Early access.">
+<style>
+  :root { color-scheme: light dark; --bg:#f7f5f0; --ink:#1d1b17; --muted:#6f6a5f; --line:#e3ded2; --accent:#1d5c4b; --soft:#e4efe9; --panel:#fffefb; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#131210; --ink:#ece8df; --muted:#9a947f; --line:#2b2924; --accent:#6cc2a5; --soft:#1c2c26; --panel:#1b1a17; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.6 "Avenir Next","Segoe UI Variable Text","Segoe UI","Helvetica Neue",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 22px 80px; }
+  .mark { font-weight: 700; letter-spacing: -.01em; }
+  .mark b { color: var(--accent); }
+  h1 { font-size: clamp(34px, 7vw, 52px); line-height: 1.08; letter-spacing: -.03em; margin: 44px 0 18px; font-weight: 700; max-width: 14em; }
+  .lead { font-size: 19px; color: var(--muted); max-width: 34em; margin: 0 0 22px; }
+  .status { display: inline-flex; align-items: center; gap: 9px; background: var(--soft); color: var(--accent); border-radius: 99px; padding: 7px 14px; font-size: 14px; font-weight: 600; }
+  .status i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  h2 { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 56px 0 14px; font-weight: 700; }
+  .plans { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; font-variant-numeric: tabular-nums; }
+  .plans th, .plans td { text-align: left; padding: 13px 16px; border-top: 1px solid var(--line); font-size: 16px; }
+  .plans thead th { border-top: 0; font-size: 13px; color: var(--muted); font-weight: 600; background: transparent; }
+  .plans tbody th { font-weight: 700; }
+  .plans td { white-space: nowrap; }
+  .note { color: var(--muted); font-size: 15px; margin: 12px 2px 0; max-width: 40em; }
+  ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 14px; }
+  ol.steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; }
+  ol.steps li::before { content: counter(s); width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); display: grid; place-items: center; font-size: 14px; font-weight: 700; }
+  .stack { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+  .stack li { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 11px; font-size: 14px; }
+  footer { margin-top: 64px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 18px; }
+  @media (max-width: 520px) { .plans th, .plans td { padding: 11px 10px; font-size: 15px; } .wrap { padding-top: 36px; } }
+</style></head>
+<body><div class="wrap">
+  <div class="mark">pan<b>deploy</b></div>
+  <h1>A small platform for hosting web apps.</h1>
+  <p class="lead">Run a container or a Git repo on a single home server and get an HTTPS address at <strong>your-app.pandeploy.dev</strong>. Built and operated as a learning project.</p>
+  <span class="status"><i></i>Early access &middot; no sign-ups yet</span>
+
+  <h2>How it works</h2>
+  <ol class="steps">
+    <li><span>You point the platform at a container image or a Git repository.</span></li>
+    <li><span>It builds and runs the app with CPU and memory limits set by your plan.</span></li>
+    <li><span>The app is reachable at its own pandeploy.dev address over HTTPS, with no ports opened on the home network.</span></li>
+  </ol>
+
+  <h2>Planned plans</h2>
+  <table class="plans">
+    <thead><tr><th>Plan</th><th>Price</th><th>Apps</th><th>CPU</th><th>Memory</th></tr></thead>
+    <tbody>
+      <tr><th>Free</th><td>$0</td><td>1</td><td>0.25</td><td>256 MB</td></tr>
+      <tr><th>Hobby</th><td>$5 / mo</td><td>3</td><td>0.5</td><td>512 MB</td></tr>
+      <tr><th>Pro</th><td>$15 / mo</td><td>10</td><td>1.0</td><td>1 GB</td></tr>
+    </tbody>
+  </table>
+  <p class="note">CPU and memory are per app. The server is small on purpose, so total capacity is capped and the plans are not final. Paid plans are not on sale yet.</p>
+
+  <h2>Built with</h2>
+  <ul class="stack"><li>Coolify</li><li>Traefik</li><li>Docker</li><li>Cloudflare Tunnel</li><li>FastAPI</li><li>Stripe</li></ul>
+
+  <footer>pandeploy.dev &middot; a personal project, not a commercial service yet.</footer>
+</div></body></html>
