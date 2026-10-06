@@ -176,6 +176,32 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     return {"received": True}
 
 
+MOCK_BILLING = os.environ.get("MOCK_BILLING", "") == "1"
+
+
+@app.post("/mock/subscribe/{tenant_id}/{tier}")
+async def mock_subscribe(tenant_id: str, tier: str, email: str = "", db: Session = Depends(get_db)):
+    """TEST MODE ONLY (MOCK_BILLING=1): switch a tenant's tier without any payment.
+    Stands in for the Stripe webhook until Stripe is connected. Refuses to
+    downgrade below the number of apps the tenant already runs."""
+    if not MOCK_BILLING:
+        raise HTTPException(404, "mock billing is disabled")
+    if tier not in TIERS:
+        raise HTTPException(400, "unknown tier")
+    sub = get_or_create_sub(db, tenant_id, email)
+    used = db.query(TenantApp).filter_by(tenant_id=tenant_id).count()
+    if used > TIERS[tier]["max_apps"]:
+        raise HTTPException(
+            409,
+            f"You have {used} apps but {TIERS[tier]['name']} allows {TIERS[tier]['max_apps']}. "
+            f"Delete {used - TIERS[tier]['max_apps']} first.",
+        )
+    sub.tier, sub.status = tier, "active"
+    db.commit()
+    await _resync_tenant_limits(tenant_id, tier, db)
+    return {"tenant_id": tenant_id, "tier": tier, "status": "active", "mock": True}
+
+
 @app.get("/quota/{tenant_id}")
 def get_quota(tenant_id: str, db: Session = Depends(get_db)):
     """Used by the deploy pipeline to enforce per-tenant resource limits."""

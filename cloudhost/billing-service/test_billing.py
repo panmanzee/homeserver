@@ -160,3 +160,33 @@ def test_downgrade_via_webhook_resyncs_limits(client, monkeypatch):
 
 def test_webhook_rejects_bad_signature(client):
     assert client.post("/webhook", content=b"{}", headers={"stripe-signature": "bad"}).status_code == 400
+
+
+# ---- mock (test-mode) subscription -------------------------------------------------
+def test_mock_subscribe_disabled_by_default(client, monkeypatch):
+    monkeypatch.setattr(main, "MOCK_BILLING", False)
+    assert client.post("/mock/subscribe/u1/hobby").status_code == 404
+
+
+def test_mock_subscribe_switches_tier_and_resyncs_limits(client, monkeypatch):
+    monkeypatch.setattr(main, "MOCK_BILLING", True)
+    client.post("/apps/register", params={"tenant_id": "u1", "coolify_app_uuid": "a1", "app_name": "a1"})
+    FakeClient.calls = []
+    assert client.post("/mock/subscribe/u1/hobby", params={"email": "u1@x.test"}).json()["tier"] == "hobby"
+    assert client.get("/quota/u1").json()["limits"]["max_apps"] == 3
+    assert FakeClient.calls and FakeClient.calls[0][1]["limits_memory"] == "512M"  # existing app got the new limits
+
+
+def test_mock_subscribe_refuses_downgrade_below_app_count(client, monkeypatch):
+    monkeypatch.setattr(main, "MOCK_BILLING", True)
+    set_tier("u1", "hobby")
+    for n in ("a", "b"):
+        assert client.post("/apps/register", params={"tenant_id": "u1", "coolify_app_uuid": n, "app_name": n}).status_code == 200
+    r = client.post("/mock/subscribe/u1/free")
+    assert r.status_code == 409 and "Delete 1" in r.json()["detail"]
+    assert client.get("/quota/u1").json()["tier"] == "hobby"
+
+
+def test_mock_subscribe_rejects_unknown_tier(client, monkeypatch):
+    monkeypatch.setattr(main, "MOCK_BILLING", True)
+    assert client.post("/mock/subscribe/u1/platinum").status_code == 400
