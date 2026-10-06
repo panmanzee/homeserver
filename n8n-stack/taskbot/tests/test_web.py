@@ -128,3 +128,67 @@ def test_root_serves_self_contained_html(client):
     assert "<html" in body.lower()
     assert "<script src=" not in body.lower()
     assert '<link rel="stylesheet" href=' not in body.lower()
+
+
+def test_board_carries_over_late_and_anytime(client):
+    from datetime import timedelta
+    from app import clock, db
+    today = clock.now_local().date()
+    late = db.create_task(title="late one", due_date=today - timedelta(days=3))
+    anytime = db.create_task(title="whenever", due_date=None)
+    future = db.create_task(title="next week", due_date=today + timedelta(days=7))
+    b = client.get("/api/board").json()
+    assert [t["title"] for t in b["carried"]] == ["late one"] and b["carried"][0]["late_days"] == 3
+    assert [t["title"] for t in b["anytime"]] == ["whenever"]
+    assert all(t["title"] != "next week" for t in b["day_tasks"] + b["carried"] + b["anytime"])
+    # other days only show that day's own tasks, never the carry-over/anytime lists
+    other = client.get(f"/api/board?day={(today + timedelta(days=7)).isoformat()}").json()
+    assert other["carried"] == [] and other["anytime"] == []
+    assert [t["title"] for t in other["day_tasks"]] == ["next week"]
+
+
+def test_late_task_stays_until_ticked_or_removed(client):
+    from datetime import timedelta
+    from app import clock, db
+    today = clock.now_local().date()
+    row = db.create_task(title="old", due_date=today - timedelta(days=20))
+    assert [t["id"] for t in client.get("/api/board").json()["carried"]] == [row["id"]]
+    client.post(f"/api/tasks/{row['id']}/complete")
+    b = client.get("/api/board").json()
+    assert b["carried"] == []
+    assert [t["id"] for t in b["done"]] == [row["id"]]   # it moves to today's "done" list
+    assert db.get_task(row["id"])["status"] == "done"
+
+
+def test_create_patch_restore(client):
+    from app import clock
+    today = clock.now_local().date().isoformat()
+    t = client.post("/api/tasks", json={"title": "  buy milk ", "due_date": None}).json()
+    assert t["title"] == "buy milk" and t["due_date"] is None
+    assert client.post("/api/tasks", json={"title": "  "}).status_code == 422
+    assert client.post("/api/tasks", json={"title": "x", "due_date": "nope"}).status_code == 422
+    moved = client.patch(f"/api/tasks/{t['id']}", json={"due_date": today}).json()
+    assert moved["due_date"] == today
+    cleared = client.patch(f"/api/tasks/{t['id']}", json={"due_date": None}).json()
+    assert cleared["due_date"] is None
+    renamed = client.patch(f"/api/tasks/{t['id']}", json={"title": "buy oat milk"}).json()
+    assert renamed["title"] == "buy oat milk" and renamed["due_date"] is None  # title-only patch keeps date
+    client.delete(f"/api/tasks/{t['id']}")
+    assert client.patch(f"/api/tasks/{t['id']}", json={"title": "z"}).status_code == 409
+    assert client.post(f"/api/tasks/{t['id']}/restore").json()["status"] == "pending"
+    assert client.post("/api/tasks/999999/restore").status_code == 404
+
+
+def test_timed_task_cannot_be_moved_from_ui(client):
+    from datetime import datetime, timedelta
+    from app import clock, db
+    start = clock.now_local().replace(hour=23, minute=0, second=0, microsecond=0)
+    row = db.create_task(title="gym", scheduled_start=start, scheduled_end=start + timedelta(hours=1))
+    assert client.patch(f"/api/tasks/{row['id']}", json={"due_date": None}).status_code == 400
+
+
+def test_done_section_lists_todays_completions(client):
+    from app import db
+    row = db.create_task(title="finish me", due_date=None)
+    client.post(f"/api/tasks/{row['id']}/complete")
+    assert [t["title"] for t in client.get("/api/board").json()["done"]] == ["finish me"]

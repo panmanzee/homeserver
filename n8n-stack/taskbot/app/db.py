@@ -121,6 +121,47 @@ def overdue_tasks(today: date) -> list[dict[str, Any]]:
         ).fetchall()
 
 
+def carried_over(today: date) -> list[dict[str, Any]]:
+    """Pending tasks whose day has passed. They stay on the board (flagged late)
+    until the user ticks or removes them — nothing is silently rolled forward."""
+    with pool.connection() as conn:
+        return conn.execute(
+            "SELECT * FROM tasks WHERE status = 'pending' AND ("
+            "  due_date < %s OR (due_date IS NULL AND scheduled_start IS NOT NULL "
+            "                    AND (scheduled_start AT TIME ZONE %s)::date < %s)) "
+            "ORDER BY COALESCE(due_date, (scheduled_start AT TIME ZONE %s)::date), id",
+            (today, clock.tz_name(), today, clock.tz_name()),
+        ).fetchall()
+
+
+def anytime_tasks() -> list[dict[str, Any]]:
+    """Pending tasks with no day and no time: they live until done or removed."""
+    with pool.connection() as conn:
+        return conn.execute(
+            "SELECT * FROM tasks WHERE status = 'pending' "
+            "AND due_date IS NULL AND scheduled_start IS NULL ORDER BY created_at, id"
+        ).fetchall()
+
+
+def done_on_day(day: date) -> list[dict[str, Any]]:
+    with pool.connection() as conn:
+        return conn.execute(
+            "SELECT * FROM tasks WHERE status = 'done' "
+            "AND (completed_at AT TIME ZONE %s)::date = %s ORDER BY completed_at DESC",
+            (clock.tz_name(), day),
+        ).fetchall()
+
+
+def restore_task(task_id: int) -> dict[str, Any] | None:
+    """Undo a tick or a removal."""
+    with pool.connection() as conn:
+        return conn.execute(
+            "UPDATE tasks SET status = 'pending', completed_at = NULL, updated_at = now() "
+            "WHERE id = %s AND status IN ('done', 'cancelled') RETURNING *",
+            (task_id,),
+        ).fetchone()
+
+
 def set_status(task_id: int, status: str) -> dict[str, Any] | None:
     completed = "completed_at = now()" if status == "done" else "completed_at = completed_at"
     with pool.connection() as conn:

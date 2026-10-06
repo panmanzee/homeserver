@@ -169,7 +169,7 @@ Telegram  ──getUpdates (long poll, 30s)──▶  poller  ──▶  plan (G
                                      ▼
                         gcal client (optional) ──▶ Google "Tasks" calendar
 
-APScheduler ──▶ morning plan (07:30) · evening review (21:00) · rollover (21:30)
+APScheduler ──▶ morning plan (07:30) · evening review (21:00)
 ```
 
 - **poller** — async background task; `getUpdates(offset, timeout=30)` in a
@@ -189,9 +189,12 @@ APScheduler ──▶ morning plan (07:30) · evening review (21:00) · rollover
   straight from the `GOOGLE_*` env vars. Every function is a no-op when
   `GOOGLE_REFRESH_TOKEN` is unset, a refresh/API error is logged and swallowed
   (never breaks a reply), and the mirror is one-way (tasks → calendar only).
-- **scheduler** — APScheduler cron jobs pinned to `TASKBOT_TZ`: morning plan,
-  evening review, and a rollover 30 min after the evening review that moves
-  still-pending untimed tasks to tomorrow.
+- **scheduler** — APScheduler cron jobs pinned to `TASKBOT_TZ`: morning plan
+  and evening review. There is **no nightly rollover**: a task keeps its date
+  and simply stays on the board, flagged "N days late", until it is ticked or
+  removed (`db.carried_over`). Tasks with no date at all are "anytime" tasks
+  (`db.anytime_tasks`) and also stay until done. `jobs.rollover_unfinished`
+  still exists but is no longer scheduled.
 
 Every inbound and outbound message is written to `message_log` for prompt
 tuning; rows older than `TASKBOT_LOG_RETENTION_DAYS` (default 30) are pruned by a
@@ -209,6 +212,10 @@ exposure).
 | `POST` | `/jobs/evening-review` | `X-API-Key: $SERVICE_API_KEY` | run the evening review now |
 | `GET` | `/` | none | the [web app](#web-app) page |
 | `GET` | `/api/tasks?day=YYYY-MM-DD` | none (tailnet-only) | that day's tasks as JSON, with a computed `synced` flag |
+| `GET` | `/api/board?day=YYYY-MM-DD` | none (tailnet-only) | one screen for the UI: `day_tasks`, plus (when `day` is today) `carried` (late, with `late_days`) and `anytime`; `done` = completed that day |
+| `POST` | `/api/tasks` | none (tailnet-only) | `{"title", "due_date"}` instant add, no LLM; `due_date: null` = anytime |
+| `PATCH` | `/api/tasks/{id}` | none (tailnet-only) | `{"title"?, "due_date"?}` rename / move; `due_date: null` = anytime; timed tasks can't be moved here |
+| `POST` | `/api/tasks/{id}/restore` | none (tailnet-only) | undo a tick or a removal |
 | `POST` | `/api/message` | none (tailnet-only) | `{"text": "..."}` → runs the same pipeline as Telegram, returns `{"reply": ...}` |
 | `POST` | `/api/tasks/{id}/complete` | none (tailnet-only) | mark a task done |
 | `DELETE` | `/api/tasks/{id}` | none (tailnet-only) | cancel a task |

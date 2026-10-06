@@ -8,6 +8,9 @@ from app.planner import Action, Plan
 @pytest.fixture(autouse=True)
 def frozen(monkeypatch):
     monkeypatch.setattr(actions.clock, "now_local", lambda: datetime(2026, 9, 7, 9, 0))
+    # "today" listings also include carried-over + anytime tasks; default to none
+    monkeypatch.setattr(actions.db, "carried_over", lambda d: [])
+    monkeypatch.setattr(actions.db, "anytime_tasks", lambda: [])
 
 
 def _plan(*actions_, reply=None):
@@ -282,3 +285,20 @@ def test_calendar_sync_unknown_task(monkeypatch):
     monkeypatch.setattr(actions.db, "get_task", lambda i: None)
     lines, ops = actions.execute_plan(_plan(Action(kind="calendar_sync", target_id=99)))
     assert ops == [] and "which task" in lines[0].lower()
+
+
+def test_list_today_includes_carried_over_and_anytime(monkeypatch):
+    monkeypatch.setattr(actions.db, "tasks_for_day", lambda d: [{"title": "gym", "scheduled_start": None}])
+    monkeypatch.setattr(actions.db, "carried_over", lambda d: [{"title": "old report"}])
+    monkeypatch.setattr(actions.db, "anytime_tasks", lambda: [{"title": "learn rust"}])
+    lines, _ = actions.execute_plan(_plan(Action(kind="list_day", date="2026-09-07")))
+    joined = "\n".join(lines)
+    assert "gym" in joined and "old report" in joined and "learn rust" in joined
+
+
+def test_list_other_day_skips_carried_over(monkeypatch):
+    monkeypatch.setattr(actions.db, "tasks_for_day", lambda d: [])
+    monkeypatch.setattr(actions.db, "carried_over", lambda d: [{"title": "old report"}])
+    monkeypatch.setattr(actions.db, "anytime_tasks", lambda: [{"title": "learn rust"}])
+    lines, _ = actions.execute_plan(_plan(Action(kind="list_day", date="2026-09-08")))
+    assert "old report" not in "\n".join(lines) and "nothing for" in "\n".join(lines)

@@ -16,6 +16,7 @@ def test_morning_plan_lists_today(monkeypatch):
         {"title": "math homework", "scheduled_start": None, "status": "pending"},
     ])
     monkeypatch.setattr(jobs.db, "overdue_tasks", lambda d: [])
+    monkeypatch.setattr(jobs.db, "anytime_tasks", lambda: [])
     text = jobs.morning_plan()
     assert "23:00 gym" in text and "• math homework" in text
 
@@ -37,3 +38,11 @@ def test_rollover_moves_untimed_pending(monkeypatch):
     monkeypatch.setattr(jobs.gcal, "sync_rescheduled", lambda row: None)
     assert jobs.rollover_unfinished() == 1
     assert moved[0][0] == 1 and moved[0][1]["due_date"] == date(2026, 9, 7)
+
+
+def test_morning_plan_lists_anytime_tasks(monkeypatch):
+    monkeypatch.setattr(jobs.db, "tasks_for_day", lambda d: [])
+    monkeypatch.setattr(jobs.db, "overdue_tasks", lambda d: [])
+    monkeypatch.setattr(jobs.db, "anytime_tasks", lambda: [{"title": "learn rust"}])
+    text = jobs.morning_plan()
+    assert "anytime" in text and "• learn rust" in text

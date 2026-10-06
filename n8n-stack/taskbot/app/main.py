@@ -7,6 +7,8 @@ import logging
 import secrets
 from contextlib import asynccontextmanager
 
+from datetime import date as _date
+
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -59,9 +61,8 @@ async def lifespan(_: FastAPI):
                           _cron(settings.taskbot_morning_time), id="morning")
         scheduler.add_job(jobs.evening_review,
                           _cron(settings.taskbot_evening_time), id="evening")
-        scheduler.add_job(jobs.rollover_unfinished,
-                          _cron_plus(settings.taskbot_evening_time, 30),
-                          id="rollover")
+        # No nightly rollover any more: unfinished tasks carry over on their own
+        # (db.carried_over) and keep their original date until ticked or removed.
         scheduler.add_job(jobs.prune_message_log, _cron("03:30"), id="prune_log")
         scheduler.start()
     try:
@@ -164,3 +165,91 @@ def api_add_to_calendar(task_id: int) -> dict:
         raise HTTPException(status_code=404, detail="task not found")
     _run_single_action(Action(kind="calendar_sync", target_id=task_id))
     return {"status": "ok"}
+
+
+def _board_json(row: dict, today: _date) -> dict:
+    out = _task_json(row)
+    if row["status"] == "pending":
+        when = row.get("due_date")
+        if when is None and row.get("scheduled_start"):
+            when = row["scheduled_start"].astimezone(clock.zone()).date()
+        out["late_days"] = (today - when).days if when and when < today else 0
+    return out
+
+
+@app.get("/api/board")
+def api_board(day: str | None = None) -> dict:
+    """Everything the UI needs for one screen. For *today* it also returns the
+    carried-over (late) tasks and the day-less "anytime" tasks, so nothing a
+    person hasn't ticked or removed ever disappears."""
+    today = clock.now_local().date()
+    d = _date.fromisoformat(day) if day else today
+    is_today = d == today
+    day_rows = db.tasks_for_day(d)
+    done_rows = db.done_on_day(d)
+    carried = db.carried_over(today) if is_today else []
+    anytime = db.anytime_tasks() if is_today else []
+    return {
+        "day": d.isoformat(), "today": today.isoformat(), "tz": clock.tz_name(),
+        "carried": [_board_json(r, today) for r in carried],
+        "day_tasks": [_board_json(r, today) for r in day_rows],
+        "anytime": [_board_json(r, today) for r in anytime],
+        "done": [_task_json(r) for r in done_rows],
+    }
+
+
+class TaskIn(BaseModel):
+    title: str
+    due_date: str | None = None   # YYYY-MM-DD, or null = "anytime" (stays until done)
+
+
+@app.post("/api/tasks")
+def api_create_task(body: TaskIn) -> dict:
+    """Instant add from the UI (no LLM call). due_date=null makes an 'anytime' task."""
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="title is empty")
+    try:
+        due = _date.fromisoformat(body.due_date) if body.due_date else None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="due_date must be YYYY-MM-DD")
+    return _task_json(db.create_task(title=title[:300], due_date=due))
+
+
+class TaskPatch(BaseModel):
+    title: str | None = None
+    due_date: str | None = None   # only applied when the field is sent; null = anytime
+
+
+@app.patch("/api/tasks/{task_id}")
+def api_update_task(task_id: int, body: TaskPatch) -> dict:
+    row = db.get_task(task_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="task not found")
+    if row["status"] != "pending":
+        raise HTTPException(status_code=409, detail=f"task is already {row['status']}")
+    sent = body.model_fields_set
+    if "due_date" in sent and row.get("scheduled_start"):
+        raise HTTPException(status_code=400,
+                            detail="timed tasks keep their time; reschedule them from chat")
+    if "title" in sent:
+        title = (body.title or "").strip()
+        if not title:
+            raise HTTPException(status_code=422, detail="title is empty")
+        row = db.rename_task(task_id, title[:300])
+    if "due_date" in sent:
+        try:
+            due = _date.fromisoformat(body.due_date) if body.due_date else None
+        except ValueError:
+            raise HTTPException(status_code=422, detail="due_date must be YYYY-MM-DD")
+        row = db.set_task_timing(task_id, due_date=due, scheduled_start=None, scheduled_end=None)
+    handler._sync([("reschedule", row)])  # no-op unless the task was already on the calendar
+    return _task_json(row)
+
+
+@app.post("/api/tasks/{task_id}/restore")
+def api_restore(task_id: int) -> dict:
+    row = db.restore_task(task_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="nothing to restore")
+    return _task_json(row)

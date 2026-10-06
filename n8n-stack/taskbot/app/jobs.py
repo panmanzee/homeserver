@@ -30,6 +30,10 @@ def morning_plan() -> str:
     if overdue:
         parts.append("\n⏮️ still open from before:")
         parts += [f"• {r['title']}" for r in overdue]
+    anytime = db.anytime_tasks()
+    if anytime:
+        parts.append("\n📌 anytime (stays until done):")
+        parts += [f"• {r['title']}" for r in anytime]
     if clock.is_utc():
         parts.append("\n⏰ timezone is UTC — set TASKBOT_TZ in .env")
     text = "\n".join(parts)
@@ -52,7 +56,8 @@ def evening_review() -> str:
 
 
 def rollover_unfinished() -> int:
-    """Called by evening_review's follow-up, and safe to run standalone.
+    """LEGACY — no longer scheduled. Unfinished tasks now carry over on their own
+    (db.carried_over) and keep their date. Kept only for manual use/tests.
     Moves still-pending untimed tasks due today to tomorrow."""
     today = clock.now_local().date()
     tomorrow = today + timedelta(days=1)

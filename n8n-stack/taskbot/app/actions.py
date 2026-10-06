@@ -144,14 +144,23 @@ def _calendar_sync(a: Action) -> tuple[str, dict | None]:
 
 
 def _list_day(a: Action) -> tuple[str, None]:
-    day = _parse_date(a.date) or clock.now_local().date()
+    today = clock.now_local().date()
+    day = _parse_date(a.date) or today
     rows = db.tasks_for_day(day)
-    if not rows:
+    late = db.carried_over(today) if day == today else []
+    anytime = db.anytime_tasks() if day == today else []
+    if not (rows or late or anytime):
         return f"nothing for {_fmt_day(day)} yet.", None
-    lines = [f"📋 {_fmt_day(day)}:"]
+    lines = [f"📋 {_fmt_day(day)}:"] if rows else []
     for r in rows:
         t = f"{_hhmm(r['scheduled_start'])} " if r["scheduled_start"] else "• "
         lines.append(f"{t}{r['title']}")
+    if late:
+        lines.append("⏮️ still open from before:")
+        lines += [f"• {r['title']}" for r in late]
+    if anytime:
+        lines.append("📌 anytime:")
+        lines += [f"• {r['title']}" for r in anytime]
     return "\n".join(lines), None
 
 
