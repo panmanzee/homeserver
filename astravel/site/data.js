@@ -55,10 +55,10 @@ export const SEED = {
 const NOTE = 'Lorem ipsum dolor sit amet consecte tur adipiscing elit semper dalar cons elementum tempus hac.';
 export const SAMPLE_DAYS = () => [
   { date: '23 Feb 2027', stops: [
-    { name: 'Pokemon center', note: NOTE, time: '08.00 - 12.00 a.m.', mode: 'Walk', cost: 30, done: true },
-    { name: 'Mount Fuji', note: NOTE, time: '1.00 - 4.00 p.m.', mode: 'By train', cost: 30 } ] },
+    { name: 'Pokemon center', lat: 35.6585, lng: 139.7016, note: NOTE, time: '08.00 - 12.00 a.m.', mode: 'Walk', cost: 30, done: true },
+    { name: 'Mount Fuji', lat: 35.3606, lng: 138.7274, note: NOTE, time: '1.00 - 4.00 p.m.', mode: 'By train', cost: 30 } ] },
   { date: '23 Feb 2027', stops: [
-    { name: 'Jigokudani Park', note: NOTE, time: '08.00 - 12.00 a.m.', mode: 'By car', cost: 30 } ] },
+    { name: 'Jigokudani Park', lat: 36.7326, lng: 138.4624, note: NOTE, time: '08.00 - 12.00 a.m.', mode: 'By car', cost: 30 } ] },
 ];
 export const SAMPLE_BUDGET = () => [
   { name: 'Pokemon center', cat: 'food', amount: 300, who: 4271 },

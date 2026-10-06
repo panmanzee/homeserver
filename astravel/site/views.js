@@ -8,9 +8,9 @@ export function navbar(active) {
   const lk = (href, label, key) => link(href, { class: active === key ? 'on' : '' }, label);
   const links = [lk('/plan', 'PLAN', 'plan'), lk('/explore', 'EXPLORE', 'explore'), lk('/#team', 'CONTACT', 'contact')];
   let right;
-  if (s && !String(active).startsWith('admin')) {
+  if (s) {
     const menu = h('div', { class: 'menu', role: 'menu' },
-      link('/profile', {}, 'My profile'), link('/plan', {}, 'Plan a trip'),
+      link('/profile', {}, 'My profile'), link('/plan', {}, 'Plan a trip'), link('/explore', {}, 'Explore'),
       s.admin ? link('/admin', {}, 'Admin console') : null,
       h('button', { type: 'button', onclick: () => { store().session = null; save(); toast('Signed out'); go('/'); } }, 'Sign out'));
     const btn = h('button', { class: 'pill', type: 'button', 'aria-haspopup': 'true', onclick: (e) => { e.stopPropagation(); menu.classList.toggle('open'); } }, s.name.split(' ')[0]);
@@ -22,8 +22,15 @@ export function navbar(active) {
     h('nav', { class: 'nav-links', 'aria-label': 'Main' }, ...links, right));
 }
 export const footer = () => h('footer', { class: 'foot' }, '© 2027 ASTRAVEL. All rights reserved.');
+// Phone navigation: a bottom tab bar (thumb-reachable). Hidden on desktop by CSS; not shown on login/admin.
+export function tabbar(active) {
+  if (active === 'login' || String(active).startsWith('admin')) return null;
+  const t = (href, ic, label, keys) => link(href, { class: keys.includes(active) ? 'on' : '', 'aria-current': keys.includes(active) ? 'page' : null }, icon(ic), h('span', {}, label));
+  return h('nav', { class: 'tabbar', 'aria-label': 'Primary' },
+    t('/explore', 'search', 'Explore', ['explore']), t('/plan', 'plus', 'Plan', ['plan']), t('/profile', 'pin', 'My trips', ['profile']), t('/#team', 'user', 'Team', ['contact']));
+}
 export function page(active, title, ...body) {
-  const out = [navbar(active), h('main', { id: 'main' }, ...body), footer()];
+  const out = [navbar(active), h('main', { id: 'main' }, ...body), footer(), tabbar(active)].filter(Boolean);
   out.title = title; return out;
 }
 

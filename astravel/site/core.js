@@ -100,7 +100,7 @@ export async function render() {
     const root = $('#app'); root.replaceChildren(h('div', { class: 'loading' }, 'Loading…'));
     try {
       const view = await r.handler(params);
-      root.replaceChildren(...view); window.scrollTo(0, 0); document.title = (view.title ? view.title + ' · ' : '') + 'ASTRAVEL';
+      root.replaceChildren(...view); window.scrollTo(0, 0); if (location.hash) { const t = document.getElementById(location.hash.slice(1)); if (t) t.scrollIntoView(); } document.title = (view.title ? view.title + ' · ' : '') + 'ASTRAVEL';
     } catch (err) {
       console.error(err);
       root.replaceChildren(h('div', { class: 'loading', style: { flexDirection: 'column', gap: '16px', textAlign: 'center' } },

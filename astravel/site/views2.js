@@ -1,6 +1,15 @@
 import { h, icon, link, store, save, go, toast } from './core.js';
 import { page, img } from './views.js';
 import { SEED, SAMPLE_DAYS, SAMPLE_BUDGET, SAMPLE_DESC } from './data.js';
+import { dialog, confirmBox } from './ui.js';
+import { mountMap, findPlace } from './map.js';
+
+const PLACE_XY = { japan: [36.2, 138.25, 5], fukuoka: [33.5904, 130.4017, 12], uminonakamichi: [33.6637, 130.3560, 13] };
+const REC_XY = { Seaside: ['Uminonakamichi Seaside Park', 33.6637, 130.3560], Sakura: ['Meguro River', 35.6414, 139.6988], Mountain: ['Mount Fuji', 35.3606, 138.7274], Japan: ['Tokyo Tower', 35.6586, 139.7454] };
+const MODES = ['Walk', 'By car', 'By train', 'By bus', 'By bike', 'Flight', 'Boat'];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const toIso = (s) => { const t = Date.parse(s + ' 12:00 UTC'); return isNaN(t) ? '' : new Date(t).toISOString().slice(0, 10); };
+const fromIso = (iso) => { const [y, m, d] = iso.split('-').map(Number); return `${String(d).padStart(2, '0')} ${MON[m - 1]} ${y}`; };
 
 const NOTE = 'Lorem ipsum dolor sit amet consecte tur adipiscing elit semper dalar cons elementum tempus hac.';
 const q = () => new URLSearchParams(location.search);
@@ -30,7 +39,7 @@ export function profileView() {
   let sel = null, filterBtn = null;
   const tripFilter = h('select', { class: 'select', 'aria-label': 'Trip status', style: { width: '145px' }, onchange: draw }, ...['Up Comming', 'All'].map((o) => h('option', {}, o)));
   const wishFilter = h('select', { class: 'select', 'aria-label': 'Kind', style: { width: '108px' }, onchange: draw }, ...['Country', 'All', 'Place'].map((o) => h('option', {}, o)));
-  const trash = (t) => circleBtn('trash', 'Delete trip', () => { if (confirm(`Delete "${t.name}"?`)) { s.trips = s.trips.filter((x) => x.id !== t.id); save(); toast('Trip deleted'); draw(); } });
+  const trash = (t) => circleBtn('trash', 'Delete trip', async () => { if (await confirmBox('Delete this trip?', `“${t.name}” will be removed from your trips. This can’t be undone.`, 'Delete trip')) { s.trips = s.trips.filter((x) => x.id !== t.id); save(); toast('Trip deleted'); draw(); } });
   function tripRow(t) {
     return h('div', { class: 'trow' },
       eImg(t.img, 'thumb', t.name),
@@ -149,7 +158,7 @@ export function placeView({ id }) {
       h('div', { class: 'review' }, h('div', { class: 'txt' }, 'Lorem ipsum dolor sit amet consecte tur adipiscing elit semper dalar cons elementum tempus hac.'), stars(3), h('div', { class: 'who' }, eImg(3721, 'round'), '@nhdfusdf,;df')),
       h('div', { class: 'review' }, h('div', { class: 'txt' }, 'Lorem ipsum dolor sit amet consecte tur adipiscing elit semper dalar cons elementum tempus hac.'), stars(3), h('div', { class: 'who' }, eImg(3775, 'round'), '@nhdfusdf,;df'))),
     h('div', { class: 'strip' }, ...[7209, 7201, 7205, 3739, 7197].map((x) => eImg(x))),
-    h('div', { class: 'mapstrip', role: 'img', 'aria-label': 'Map of the area' }),
+    (() => { const el = h('div', { class: 'mapstrip', role: 'application', 'aria-label': `Map of ${title}` }); const xy = PLACE_XY[c.id] || PLACE_XY.fukuoka; mountMap(el, { editable: false, pad: () => ({}) }).then((m) => { m.set([{ key: 'p', day: 0, name: title, lat: xy[0], lng: xy[1] }], 'p'); m.map.setView([xy[0], xy[1]], xy[2], { animate: false }); }).catch(() => el.replaceChildren(h('p', { class: 'map-fail' }, 'The map couldn’t load.'))); return el; })(),
     h('h3', { style: { font: '400 20px/24px var(--display)', margin: '24px 0 0' } }, 'Recommend'),
     h('div', { class: 'recrow' }, ...s.recommend.map(([n, x]) => h('div', {}, eImg(x), h('b', {}, 'Japan'))))));
 }
@@ -185,7 +194,25 @@ export function tripView(mode) {
     const root = h('section', { class: 'trip' });
     const s = store();
 
-    const persist = () => { if (mode === 'edit' && !isTemplate) { const t = s.trips.find((x) => x.id === id); Object.assign(t, { name: T.name || t.name, longDesc: T.desc, tags: T.tags, days: T.days, budget: T.budget }); save(); } };
+    let mapCtl = null; let mapInit = null;
+    const mapEl = h('div', { class: 'tmap', role: 'application', 'aria-label': 'Trip map. Markers are the stops of your trip.' });
+    const allStops = () => T.days.flatMap((d, di) => d.stops.map((st, si) => ({ key: di + ':' + si, day: di, name: st.name, lat: st.lat, lng: st.lng })));
+    const selKey = () => { const all = allStops(); return (all.find((x) => x.name === picked && x.lat != null) || {}).key; };
+    const syncMap = (fit) => { if (!mapCtl) return; mapCtl.set(allStops(), selKey()); if (fit) mapCtl.fit(); };
+    const refreshLists = () => document.querySelectorAll('.tpanel .scroll').forEach((w) => w.redraw && w.redraw());
+    const refreshCard = () => { const c = document.querySelector('.pcard'); if (c && c.refresh) c.refresh(); };
+    const addStop = (name, lat, lng) => {
+      const d = T.days[T.days.length - 1]; d.stops.push({ name, lat, lng, note: NOTE, time: '08.00 - 12.00 a.m.', mode: 'Walk', cost: 30 });
+      picked = name; persist(); refreshLists(); refreshCard(); if (mapCtl) mapCtl.flyTo(lat, lng); toast(`Added ${name}`);
+    };
+    const pad = () => {
+      if (innerWidth <= 1100) return {};
+      const par = mapEl.parentElement; if (!par) return {}; const m = mapEl.getBoundingClientRect(); const pn = par.querySelector('.tpanel'); const cd = par.querySelector('.pcard'); const out = {};
+      if (pn) { const r = pn.getBoundingClientRect(); if (r.left - m.left < 8) out.l = r.right - m.left; else out.r = m.right - r.left; }
+      if (cd) { const r = cd.getBoundingClientRect(); out.b = Math.max(0, m.bottom - r.top); }
+      return out;
+    };
+    const persist = () => { syncMap(); if (mode === 'edit' && !isTemplate) { const t = s.trips.find((x) => x.id === id); Object.assign(t, { name: T.name || t.name, longDesc: T.desc, tags: T.tags, days: T.days, budget: T.budget }); save(); } };
     function saveTrip() {
       const name = (T.name || '').trim() || 'Trip name';
       if (mode === 'create') {
@@ -223,17 +250,22 @@ export function tripView(mode) {
     };
     const stopEl = (d, di, st, si, redraw) => {
       const nm = h('div', { class: 'nm' }, (() => { const p = icon('pin', 'pin'); p.innerHTML = '<path d="M12 22s-7-6.200-7-12a7 7 0 0 1 14 0c0 5.800-7 12-7 12z"/><circle cx="12" cy="10" r="2.600"/>'; return p; })(),
-        editing ? h('input', { value: st.name, 'aria-label': 'Place name', style: { font: 'inherit', border: 0, borderBottom: '1px dashed var(--blue)', background: 'transparent', outline: 0, width: '60%' }, oninput: (e) => { st.name = e.target.value; picked = st.name; } })
-          : h('button', { type: 'button', style: { all: 'unset', cursor: 'pointer' }, onclick: () => { picked = st.name; redraw(); const c = document.querySelector('.pcard'); if (c && c.refresh) c.refresh(); } }, st.name));
+        editing ? h('input', { value: st.name, 'aria-label': 'Place name', style: { font: 'inherit', border: 0, borderBottom: '1px dashed var(--blue)', background: 'transparent', outline: 0, width: '60%' }, oninput: (e) => { st.name = e.target.value; picked = st.name; },
+            onchange: async (e) => { const qn = e.target.value.trim(); if (!qn) return; try { const r = await findPlace(qn); if (r) { st.lat = r.lat; st.lng = r.lng; persist(); refreshCard(); if (mapCtl) mapCtl.flyTo(r.lat, r.lng); } else toast(`Couldn’t find “${qn}” on the map. Tap the map to drop a pin instead.`); } catch (_) { toast('Place search is unavailable right now.'); } } })
+          : h('button', { type: 'button', style: { all: 'unset', cursor: 'pointer' }, onclick: () => { picked = st.name; redraw(); refreshCard(); if (mapCtl) { mapCtl.select(selKey(), true); } } }, st.name));
       const el = h('div', { class: 'stop' + (!editing && st.done ? ' done' : '') },
         editing ? h('span', { class: 'grip' }, icon('grip')) : null, nm,
         editing ? circleBtn('trash', 'Remove stop', () => { d.stops.splice(si, 1); if (!d.stops.length && T.days.length > 1) T.days.splice(di, 1); persist(); redraw(); }, 'circle-m del')
           : h('button', { class: 'circle-m check' + (st.done ? ' on' : ''), type: 'button', 'aria-label': st.done ? 'Mark as not done' : 'Mark as done', 'aria-pressed': String(!!st.done), onclick: () => { st.done = !st.done; if (id) { const t = s.trips.find((x) => x.id === id); if (t) save(); } redraw(); } }, icon('check')),
         h('p', { class: 'note' }, st.note),
         h('div', { class: 'tags' },
-          editing ? h('button', { class: 'pill-o', type: 'button', title: 'Edit time', onclick: () => { const x = prompt('Time', st.time); if (x) { st.time = x.slice(0, 24); persist(); redraw(); } } }, st.time) : h('span', { class: 'pill-o' }, st.time),
-          editing ? h('button', { class: 'pill-o', type: 'button', title: 'Edit transport', onclick: () => { const x = prompt('Transport', st.mode); if (x) { st.mode = x.slice(0, 16); persist(); redraw(); } } }, st.mode) : h('span', { class: 'pill-o' }, st.mode),
-          editing ? h('button', { class: 'pill-o fill', type: 'button', title: 'Edit cost', onclick: () => { const x = prompt('Cost in $', st.cost); if (x !== null && !isNaN(+x)) { st.cost = Math.max(0, +x); persist(); redraw(); } } }, '$' + st.cost) : h('span', { class: 'pill-o fill' }, '$' + st.cost)));
+          ...(() => { const open = async () => { const r = await dialog({ title: 'Stop details', body: st.name, ok: 'Save', fields: [
+              { name: 'time', label: 'Time', value: st.time, placeholder: 'e.g. 08.00 - 12.00 a.m.', max: 24, required: true },
+              { name: 'mode', label: 'Getting there', type: 'select', value: MODES.includes(st.mode) ? st.mode : MODES[0], options: MODES },
+              { name: 'cost', label: 'Cost ($)', type: 'number', value: st.cost, min: 0 }] });
+            if (r) { Object.assign(st, { time: r.time, mode: r.mode, cost: r.cost }); persist(); redraw(); } };
+            const pill = (txt, cls) => editing ? h('button', { class: cls, type: 'button', title: 'Edit stop details', onclick: open }, txt) : h('span', { class: cls }, txt);
+            return [pill(st.time, 'pill-o'), pill(st.mode, 'pill-o'), pill('$' + st.cost, 'pill-o fill')]; })()));
       return el;
     };
     const leftBody = () => {
@@ -242,19 +274,19 @@ export function tripView(mode) {
         const kids = [];
         T.days.forEach((d, di) => {
           kids.push(h('div', { class: 'day' }, h('h3', {}, d.date), editing ? h('div', { class: 'acts' },
-            circleBtn('pencil', 'Edit date', () => { const v = prompt('Date', d.date); if (v) { d.date = v.slice(0, 20); persist(); draw(); } }, 'circle-m'),
+            circleBtn('pencil', 'Edit date', async () => { const r = await dialog({ title: 'Change date', ok: 'Save', fields: [{ name: 'date', label: 'Day', type: 'date', value: toIso(d.date), required: true, max: 12 }] }); if (r && r.date) { d.date = fromIso(r.date); persist(); draw(); } }, 'circle-m'),
             circleBtn('trash', 'Remove day', () => { if (T.days.length > 1) { T.days.splice(di, 1); persist(); draw(); } else toast('A trip needs at least one day'); }, 'circle-m')) : null));
           d.stops.forEach((st, si) => kids.push(stopEl(d, di, st, si, draw)));
         });
         if (editing) {
           kids.push(h('div', { class: 'rhead' }, 'Recommend'), h('div', { class: 'recrow' }, ...s.recommend.map(([n, x]) => h('div', {}, eImg(x), h('b', {}, n),
-            circleBtn('plus', `Add ${n} to the trip`, () => { const d = T.days[T.days.length - 1]; d.stops.push({ name: n === 'Japan' ? 'Tokyo Tower' : n, note: NOTE, time: '08.00 - 12.00 a.m.', mode: 'Walk', cost: 30 }); persist(); toast(`Added ${n}`); draw(); }, 'circle-btn')))),
+            circleBtn('plus', `Add ${n} to the trip`, () => { const rc = REC_XY[n] || [n]; addStop(rc[0], rc[1], rc[2]); }, 'circle-btn')))),
             h('div', { class: 'addrow' }, circleBtn('plus', 'Add a day', () => { T.days.push({ date: '24 Feb 2027', stops: [{ name: 'New place', note: NOTE, time: '08.00 - 12.00 a.m.', mode: 'Walk', cost: 30 }] }); persist(); draw(); }, 'circle-m')));
         }
         kids.push(budgetEl());
         wrap.replaceChildren(...kids);
       };
-      draw(); return wrap;
+      wrap.redraw = draw; draw(); return wrap;
     };
     const total = () => T.budget.reduce((a, b) => a + (+b.amount || 0), 0);
     function budgetEl() {
@@ -293,18 +325,31 @@ export function tripView(mode) {
       let main;
       if (editing || isTemplate) {
         const card = placeCard({ left: '825px', top: isTemplate ? '354px' : '642px', width: '543px', height: '410px', overflow: 'auto' });
-        main = h('div', { class: 'tmain' }, left, card);
+        main = h('div', { class: 'tmain' }, mapEl, mapBar(), left, card);
       } else {
         const right = h('div', { class: 'tpanel right vm' }, leftBody());
-        main = h('div', { class: 'tmain', style: { height: '852px', backgroundPosition: '0 -270px' } }, right, placeCard({ left: '24px', top: '398px', width: '523px', height: '410px', overflow: 'auto' }));
+        main = h('div', { class: 'tmain view', style: { height: '852px' } }, mapEl, right, placeCard({ left: '24px', top: '398px', width: '523px', height: '410px', overflow: 'auto' }));
       }
-      if (isTemplate) { main.style.backgroundPosition = '0 -292px'; main.style.height = '808px'; }
+      if (isTemplate) { main.style.height = '808px'; }
       const descBlock = editing
         ? [h('p', { class: 'tdesc-l' }, 'description'), h('textarea', { class: 'tdesc', placeholder: 'Type here', 'aria-label': 'Description', maxlength: '600', oninput: (e) => { T.desc = e.target.value; } }, T.desc || '')]
         : [h('p', { class: 'tdesc-view' }, T.longDesc || T.desc || SAMPLE_DESC)];
       root.replaceChildren(header(), ...descBlock, tagRow(), main);
     }
+    function mapBar() {
+      if (!editing || isTemplate) return null;
+      const inp = h('input', { type: 'search', placeholder: 'Search a place to add', 'aria-label': 'Search a place to add to the trip', maxlength: '80', autocomplete: 'off' });
+      return h('form', { class: 'mapbar', onsubmit: async (e) => { e.preventDefault(); const qn = inp.value.trim(); if (!qn) return; inp.disabled = true;
+        try { const r = await findPlace(qn); if (r) { addStop(r.name, r.lat, r.lng); inp.value = ''; } else toast(`Couldn’t find “${qn}”. Try a more specific name.`); } catch (_) { toast('Place search is unavailable right now.'); } finally { inp.disabled = false; inp.focus(); } } },
+        h('label', { class: 'input-pill' }, icon('search'), inp), h('button', { class: 'btn', type: 'submit' }, 'Add'));
+    }
     draw();
+    mapInit = mountMap(mapEl, { editable: editing && !isTemplate, pad,
+      onSelect: (k) => { const [di, si] = k.split(':').map(Number); picked = T.days[di].stops[si].name; mapCtl.select(k); refreshCard(); },
+      onMove: (k, lat, lng) => { const [di, si] = k.split(':').map(Number); const st = T.days[di].stops[si]; st.lat = lat; st.lng = lng; persist(); },
+      onAdd: (lat, lng, name) => addStop(name, lat, lng) })
+      .then((c) => { mapCtl = c; syncMap(true); })
+      .catch(() => mapEl.replaceChildren(h('p', { class: 'map-fail' }, 'The map couldn’t load. Check your connection and refresh.')));
     return page('plan', T.name || 'Plan a trip', root);
   };
 }
