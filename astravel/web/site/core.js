@@ -61,23 +61,31 @@ export function icon(name, cls = '') {
 }
 export const heartFilled = (cls = '') => { const s = icon('heart', cls); s.style.fill = 'currentColor'; return s; };
 
-export function toast(msg) {
-  const t = h('div', { class: 'toast', role: 'status' }, msg);
-  document.body.append(t); setTimeout(() => t.remove(), 2600);
+export function toast(msg, kind) {
+  const t = h('div', { class: 'toast' + (kind === 'err' ? ' err' : ''), role: kind === 'err' ? 'alert' : 'status' }, msg);
+  document.body.append(t); setTimeout(() => t.remove(), kind === 'err' ? 4200 : 2600);
 }
 
-// ----- persistent store (browser localStorage; this is a front-end prototype, there is no server database)
-const KEY = 'astravel.v1';
-let state = null;
-export function initStore(seed) {
-  try { state = JSON.parse(localStorage.getItem(KEY)); } catch (_) { state = null; }
-  if (!state || typeof state !== 'object' || state.v !== seed.v) state = structuredClone(seed);
-  else for (const k of Object.keys(seed)) if (state[k] === undefined) state[k] = structuredClone(seed[k]); // fill anything missing
+// ----- app state: loaded from the server (/api/bootstrap), never trusted from localStorage
+import { api, ApiError } from './api.js';
+export const state = { ready: false, me: null, catalog: [], trips: [], wishlist: [], following: [], followers: [], googleClientId: null, appName: 'ASTRAVEL', maint: false };
+export const store = () => state;
+export async function refresh() {
+  const d = await api.get('/bootstrap');
+  Object.assign(state, { me: null, trips: [], wishlist: [], following: [], followers: [] }, d, { ready: true });
   return state;
 }
-export const store = () => state;
-export function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) { /* quota or private mode */ } }
-export function resetStore(seed) { state = structuredClone(seed); save(); }
+export const isStaff = () => !!(state.me && state.me.staff);
+export const can = (module, action) => !!(state.me && (state.me.role === 'Super Admin' || (state.me.perms[module] || [])[{ view: 0, create: 1, edit: 2, delete: 3 }[action]]));
+
+// Run an API call and show a friendly message on failure. Returns undefined when it fails.
+export async function attempt(fn, okMsg) {
+  try { const r = await fn(); if (okMsg) toast(okMsg); return r === undefined ? true : r; }
+  catch (e) {
+    if (e instanceof ApiError && e.status === 401 && state.me) { state.me = null; toast('Your session ended. Please sign in again.', 'err'); go('/login'); return; }
+    toast(e.message || 'Something went wrong', 'err');
+  }
+}
 
 // ----- router (History API; the web server falls back to index.html)
 const routes = [];
@@ -87,25 +95,39 @@ export function route(pattern, handler, opts = {}) {
 }
 export function go(path, replace) {
   if (replace) history.replaceState({}, '', path); else history.pushState({}, '', path);
-  render();
+  return render();
 }
+let token = 0;
 export async function render() {
-  const path = location.pathname;
+  const my = ++token; const path = location.pathname; const root = $('#app');
+  if (!state.ready) {
+    root.replaceChildren(h('div', { class: 'loading' }, 'Loading…'));
+    try { await refresh(); } catch (e) {
+      root.replaceChildren(h('div', { class: 'loading', style: { flexDirection: 'column', gap: '16px', textAlign: 'center' } }, h('p', {}, 'We can’t reach the server right now.'),
+        h('button', { class: 'btn', type: 'button', onclick: () => render() }, 'Try again'))); return;
+    }
+  }
+  if (my !== token) return;
   for (const r of routes) {
     const m = path.match(r.re);
     if (!m) continue;
     const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
-    if (r.auth && !state.session) { sessionStorage.setItem('next', path); return go('/login', true); }
-    if (r.admin && !(state.session && state.session.admin)) return go('/login', true);
-    const root = $('#app'); root.replaceChildren(h('div', { class: 'loading' }, 'Loading…'));
+    if (r.auth && !state.me) { sessionStorage.setItem('next', path + location.search); return go('/login', true); }
+    if (r.admin && !isStaff()) { if (!state.me) { sessionStorage.setItem('next', path); return go('/login', true); } toast('You don’t have access to the admin console', 'err'); return go('/', true); }
+    if (state.maint && !isStaff() && path !== '/login') { const { maintenanceView } = await import('./views.js'); const v = maintenanceView(); root.replaceChildren(...v); document.title = v.title; return; }
+    root.replaceChildren(h('div', { class: 'loading' }, 'Loading…'));
     try {
       const view = await r.handler(params);
-      root.replaceChildren(...view); window.scrollTo(0, 0); if (location.hash) { const t = document.getElementById(location.hash.slice(1)); if (t) t.scrollIntoView(); } document.title = (view.title ? view.title + ' · ' : '') + 'ASTRAVEL';
+      if (my !== token) return;
+      if (!view) return;
+      root.replaceChildren(...view); window.scrollTo(0, 0); if (location.hash) { const t = document.getElementById(location.hash.slice(1)); if (t) t.scrollIntoView(); } document.title = (view.title ? view.title + ' · ' : '') + state.appName;
     } catch (err) {
+      if (my !== token) return;
       console.error(err);
+      if (err instanceof ApiError && err.status === 401) { state.me = null; sessionStorage.setItem('next', path); return go('/login', true); }
       root.replaceChildren(h('div', { class: 'loading', style: { flexDirection: 'column', gap: '16px', textAlign: 'center' } },
-        h('p', {}, 'Something went wrong while loading this page.'),
-        h('button', { class: 'btn', type: 'button', onclick: () => { resetStore(window.__SEED); render(); } }, 'Reset demo data and retry')));
+        h('p', {}, err instanceof ApiError ? err.message : 'Something went wrong while loading this page.'),
+        h('button', { class: 'btn', type: 'button', onclick: () => render() }, 'Try again')));
     }
     return;
   }

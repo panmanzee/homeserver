@@ -1,13 +1,31 @@
 # ASTRAVEL
 
-Web build of the ASTRAVEL Figma design (trip planner + admin console). Vanilla ES-module SPA, no framework, no build step; all data is mock and lives in the browser's localStorage.
+Trip planner: build itineraries on a map, budget costs, share trips with friends. Live at https://astravel.pandeploy.dev
 
-- Live: https://astravel.pandeploy.dev  (the Google button signs in as the demo user "Mimi Kagari", who is also admin)
-- Fonts: Protest Strike (headings, matched to the Figma by pixel comparison), DM Sans, Roboto, Inter, all self-hosted.
-- Deploy (LXC 102): `docker build -t astravel:1 .` then run on the `coolify` network as `astravel` (port 8080), routed by `/data/coolify/proxy/dynamic/astravel.yaml` (Host `astravel.pandeploy.dev` -> `http://astravel:8080`).
-- Security: strict CSP (self only), read-only container, all caps dropped. User text is only inserted as text nodes.
+## Parts
+- `web/`: static front end (vanilla JS, no build step) served by nginx. nginx also proxies `/api/` to the API.
+- `api/`: FastAPI service. PostgreSQL for all data. Real accounts (email + password, Google sign-in), trips, wishlist, follows, reviews and an admin console with roles and permissions.
 
-## Map and phone layout
-- Real map: Leaflet (self-hosted in `site/vendor`) with OpenStreetMap tiles; place search and reverse lookup use OSM Nominatim (user-initiated, one request at a time). Tap the map in the trip editor to add a stop.
-- Phone-first: bottom tab bar, stacked trip editor with the map on top, bottom-sheet dialogs (no native prompt/confirm). Layout rules are in `site/mobile.css`.
-- CSP allows only `tile.openstreetmap.org` (images) and `nominatim.openstreetmap.org` (fetch) besides self.
+## What is real
+- Accounts: argon2 password hashes, HttpOnly session cookies stored (hashed) in the database, login throttling, Google ID-token verification.
+- Every write is checked on the server: a trip can only be changed by its owner or invited members, admin endpoints check the role's permission matrix, and the last Super Admin can't be removed.
+- Admin console: dashboard (live request counts, service health), users (search, filter, change role/status, delete), reports (date range, CSV export), roles and permissions (saved and enforced), audit log, settings (including maintenance mode).
+- Maps: Leaflet + OpenStreetMap tiles; place search and tap-to-add use OpenStreetMap Nominatim.
+
+## Configuration (api container environment, never committed)
+| Variable | Meaning |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (dedicated `astravel` database and role) |
+| `SESSION_SECRET` | random string used to hash session tokens |
+| `ADMIN_EMAILS` | comma-separated emails that become Super Admin after a verified Google sign-in |
+| `GOOGLE_CLIENT_ID` | OAuth Web client ID (public value). Empty = Google button disabled |
+| `COOKIE_SECURE` | `1` behind HTTPS |
+
+## Deploy (as on the home server)
+```
+docker build -t astravel-api:1 api/
+docker run -d --name astravel-api --network coolify --env-file astravel-api.env --read-only --tmpfs /tmp --cap-drop=ALL astravel-api:1
+# web: copy web/site to a release folder web/site/v/<id>/ for js/css and point index.html at it (cache busting), then
+docker build -t astravel:N web/ && docker run -d --name astravel --network coolify --read-only --tmpfs /tmp --tmpfs /var/cache/nginx --cap-drop=ALL astravel:N
+```
+Traefik routes `astravel.pandeploy.dev` to `http://astravel:8080`.
