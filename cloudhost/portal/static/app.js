@@ -285,6 +285,7 @@ async function viewLanding(scrollTo) {
 // ───────────────────────── auth
 function viewAuth(mode) {
   const signup = mode === 'signup';
+  const reset = mode === 'reset';
   const errBox = h('div', { class: 'formerr', role: 'alert', hidden: true });
   const fields = {};
   const mk = (id, label, type, extra = {}) => {
@@ -296,7 +297,7 @@ function viewAuth(mode) {
   const rules = {
     name: (v) => (v.trim() ? '' : 'Enter your name.'),
     email: (v) => (/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(v.trim()) ? '' : 'Enter a valid email address.'),
-    password: (v) => (!signup || v.length >= 10 ? (v ? '' : 'Enter your password.') : 'Use at least 10 characters.'),
+    password: (v) => (!(signup || reset) || v.length >= 10 ? (v ? '' : 'Enter your password.') : 'Use at least 10 characters.'),
   };
   const show = h('button', { class: 'btn quiet sm', type: 'button', 'aria-label': 'Show password', onclick: () => {
     const p = fields.password.input; p.type = p.type === 'password' ? 'text' : 'password';
@@ -306,12 +307,12 @@ function viewAuth(mode) {
   const form = h('form', { novalidate: true },
     signup ? mk('name', 'Your name', 'text', { ac: 'name' }) : null,
     mk('email', 'Email', 'email', { ac: 'email', attrs: { inputmode: 'email' } }),
-    mk('password', 'Password', 'password', { ac: signup ? 'new-password' : 'current-password',
+    mk('password', reset ? 'New password' : 'Password', 'password', { ac: (signup || reset) ? 'new-password' : 'current-password',
       hint: signup ? 'At least 10 characters. A short sentence works well.' : null, wrap: (i) => h('div', { class: 'input-row' }, i, show) }),
-    signup ? bar : null,
-    signup && S.config.invite_required ? mk('invite', 'Invite code', 'text', { ac: 'off' }) : null,
+    (signup || reset) ? bar : null,
+    (signup || reset) && S.config.invite_required ? mk('invite', 'Invite code', 'text', { ac: 'off' }) : null,
     errBox,
-    h('div', { style: 'margin-top:22px' }, h('button', { class: 'btn', style: 'width:100%', type: 'submit' }, signup ? 'Create account' : 'Sign in')));
+    h('div', { style: 'margin-top:22px' }, h('button', { class: 'btn', style: 'width:100%', type: 'submit' }, signup ? 'Create account' : reset ? 'Set new password' : 'Sign in')));
   fields.password.input.addEventListener('input', () => { $('i', bar).style.setProperty('--w', Math.min(100, (fields.password.input.value.length / 16) * 100) + '%'); $('i', bar).style.background = fields.password.input.value.length >= 10 ? 'var(--run)' : 'var(--fail)'; });
   for (const k of Object.keys(rules)) fields[k]?.input.addEventListener('blur', () => validateField(k));
   function validateField(k) {
@@ -326,22 +327,24 @@ function viewAuth(mode) {
     const btn = $('button[type=submit]', form); btn.disabled = true; btn.replaceChildren(h('span', { class: 'spin' }), 'One moment');
     try {
       const body = { email: fields.email.input.value, password: fields.password.input.value };
-      if (signup) { body.name = fields.name.input.value; body.invite = fields.invite?.input.value || ''; }
-      await api(signup ? '/signup' : '/login', { method: 'POST', body });
+      if (signup) { body.name = fields.name.input.value; }
+      if (signup || reset) body.invite = fields.invite?.input.value || '';
+      await api(signup ? '/signup' : reset ? '/reset' : '/login', { method: 'POST', body });
       await loadMe();
-      toast(signup ? 'Welcome to pandeploy' : 'Signed in');
+      toast(signup ? 'Welcome to pandeploy' : reset ? 'Password changed' : 'Signed in');
       location.hash = '#/apps';
     } catch (err) {
       errBox.textContent = err.message; errBox.hidden = false;
-      btn.disabled = false; btn.replaceChildren(signup ? 'Create account' : 'Sign in');
+      btn.disabled = false; btn.replaceChildren(signup ? 'Create account' : reset ? 'Set new password' : 'Sign in');
     }
   });
   mount(h('div', {}, marketingNav(),
     h('main', { id: 'main', tabindex: '-1', class: 'wrap authwrap' },
       h('div', { class: 'card' },
-        h('h1', {}, signup ? 'Create your account' : 'Welcome back'),
-        h('p', { class: 'muted' }, signup ? 'Free plan included. No card needed.' : 'Sign in to manage your apps.'),
+        h('h1', {}, signup ? 'Create your account' : reset ? 'Reset your password' : 'Welcome back'),
+        h('p', { class: 'muted' }, signup ? 'Free plan included. No card needed.' : reset ? 'Enter your email, the invite code you signed up with, and a new password.' : 'Sign in to manage your apps.'),
         form,
+        !signup && !reset ? h('p', { class: 'swap' }, h('a', { href: '#/reset' }, 'Forgot your password?')) : null,
         h('p', { class: 'swap' }, signup ? 'Already have an account? ' : 'New here? ', h('a', { href: signup ? '#/login' : '#/signup' }, signup ? 'Sign in' : 'Create an account'))))));
   (signup ? fields.name : fields.email).input.focus();
 }
@@ -918,11 +921,12 @@ async function route() {
     if (!S.me) { toast('Sign in to continue'); location.hash = '#/login'; return; }
   } else if (S.me === null && !S.checked) { await loadMe(); }
   S.checked = true;
-  if ((key === 'login' || key === 'signup') && S.me) { location.hash = '#/apps'; return; }
+  if ((key === 'login' || key === 'signup' || key === 'reset') && S.me) { location.hash = '#/apps'; return; }
   try {
     if (key === '' || key === 'pricing') await viewLanding(key === 'pricing' ? 'pricing' : null);
     else if (key === 'login') viewAuth('login');
     else if (key === 'signup') viewAuth('signup');
+    else if (key === 'reset') viewAuth('reset');
     else if (key === 'apps') await viewApps();
     else if (key === 'machines') await viewMachines();
     else if (key === 'billing') await viewBilling();

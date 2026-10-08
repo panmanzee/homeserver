@@ -509,3 +509,32 @@ def test_snapshot_routes_proxy_and_isolate(env):
 def test_plans_report_machine_allowance(env):
     d = client().get("/api/plans").json()["plans"]
     assert all("machines" in p for p in d)
+
+
+def test_password_reset_with_invite_code(env, monkeypatch):
+    monkeypatch.setattr(main, "INVITE_CODE", "letmein")
+    cl = client()
+    assert cl.post("/api/signup", json={"name": "Ann", "email": "a@example.com", "password": "correct horse battery", "invite": "letmein"}).status_code == 200
+    other = client()
+    # wrong code and unknown email give the same refusal, so emails cannot be probed
+    r1 = other.post("/api/reset", json={"email": "a@example.com", "invite": "nope", "password": "a brand new password"})
+    r2 = other.post("/api/reset", json={"email": "ghost@example.com", "invite": "letmein", "password": "a brand new password"})
+    assert r1.status_code == r2.status_code == 403 and r1.json() == r2.json()
+    assert other.post("/api/reset", json={"email": "a@example.com", "invite": "letmein", "password": "short"}).status_code == 422
+    assert other.post("/api/reset", json={"email": "a@example.com", "invite": "letmein", "password": "a brand new password"}).status_code == 200
+    assert other.get("/api/me").status_code == 200                                       # signed in after reset
+    assert cl.get("/api/me").status_code == 401                                          # the old session is gone
+    assert client().post("/api/login", json={"email": "a@example.com", "password": "correct horse battery"}).status_code == 401
+    assert client().post("/api/login", json={"email": "a@example.com", "password": "a brand new password"}).status_code == 200
+
+
+def test_password_reset_is_disabled_without_invite_code_and_throttled(env, monkeypatch):
+    monkeypatch.setattr(main, "INVITE_CODE", "")
+    cl = client()
+    signup(cl)
+    assert client().post("/api/reset", json={"email": "a@example.com", "invite": "", "password": "a brand new password"}).status_code == 403
+    monkeypatch.setattr(main, "INVITE_CODE", "letmein")
+    bad = client()
+    for _ in range(10):
+        bad.post("/api/reset", json={"email": "a@example.com", "invite": "guess", "password": "a brand new password"})
+    assert bad.post("/api/reset", json={"email": "a@example.com", "invite": "letmein", "password": "a brand new password"}).status_code == 429

@@ -425,6 +425,36 @@ def login(body: LoginIn, request: Request, response: Response):
     return {"user": public_user(u)}
 
 
+class ResetIn(BaseModel):
+    email: str
+    invite: str = ""
+    password: str
+
+
+@app.post("/api/reset")
+def reset_password(body: ResetIn, request: Request, response: Response):
+    """No email service: the invite code (known only to people you invited) proves it is a legitimate reset."""
+    email = body.email.strip().lower()
+    key = _throttle_key(request, "reset:" + email)
+    if throttled(key):
+        raise HTTPException(429, "Too many attempts. Wait 15 minutes and try again.")
+    if not 10 <= len(body.password) <= 200:
+        raise HTTPException(422, "Use a password with at least 10 characters.")
+    if not INVITE_CODE or not hmac.compare_digest(body.invite.strip(), INVITE_CODE):
+        _fails.setdefault(key, []).append(time.time())
+        raise HTTPException(403, "That invite code isn't valid.")
+    with db() as c:
+        u = c.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
+        if not u:
+            _fails.setdefault(key, []).append(time.time())
+            raise HTTPException(403, "That invite code isn't valid.")        # same answer: do not reveal which emails exist
+        c.execute("UPDATE users SET pw_hash=? WHERE id=?", (hash_password(body.password), u["id"]))
+        c.execute("DELETE FROM sessions WHERE user_id=?", (u["id"],))        # every old sign-in stops working
+    _fails.pop(key, None)
+    set_session(response, u["id"])
+    return {"ok": True}
+
+
 @app.post("/api/logout")
 def logout(request: Request, response: Response):
     token = request.cookies.get("pd_session")
