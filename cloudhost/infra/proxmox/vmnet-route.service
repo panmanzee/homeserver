@@ -1,0 +1,10 @@
+[Unit]
+Description=Route to the customer VM network via the Proxmox host
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/ip route replace 10.77.0.0/24 via 192.168.0.101
+[Install]
+WantedBy=multi-user.target

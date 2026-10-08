@@ -1,0 +1,12 @@
+[Unit]
+Description=Customer VM network rules (NAT + isolation)
+After=network-online.target networking.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/cloudhost/vm-net.nft
+
+[Install]
+WantedBy=multi-user.target

@@ -86,3 +86,10 @@ docker run --rm -v "$PWD/billing-service:/w" -w /w cloudhost-billing:latest \
 Stripe (account, keys, price IDs, public webhook route at `billing.pandeploy.dev/webhook`; the portal's
 `/api/subscribe` then calls Stripe instead of `/mock/subscribe`), public exposure of the portal (tunnel route
 `app.pandeploy.dev` -> `http://localhost:8100`), email verification and password reset, disk limits, idle sleep for Free apps, and setting `PUBLIC_BASE_URL` to the real https URL.
+
+## Virtual machines (compute-service/)
+
+Besides containers, customers can rent a whole Ubuntu virtual machine from the portal's **Machines** page:
+a real KVM machine on the Proxmox host, with a browser terminal and an optional public https address.
+It sits on a private network that reaches the internet and nothing else. See `compute-service/README.md` for how
+it works and the isolation table, and `infra/proxmox/` for the host setup.

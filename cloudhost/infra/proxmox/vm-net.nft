@@ -1,0 +1,43 @@
+# Rules for the customer-VM network (vmbr1, 10.77.0.0/24). Only touches its own tables.
+table inet cloudhost_vm
+delete table inet cloudhost_vm
+table ip cloudhost_vm_nat
+delete table ip cloudhost_vm_nat
+table bridge cloudhost_vm_l2
+delete table bridge cloudhost_vm_l2
+
+table inet cloudhost_vm {
+  chain forward {
+    type filter hook forward priority 0; policy accept;
+    ct state established,related accept
+    # only the cloudhost server (LXC 102) may open connections INTO the VM network (web terminal, public web address)
+    iifname "vmbr0" oifname "vmbr1" ip saddr 192.168.0.102 accept
+    oifname "vmbr1" drop
+    # a customer VM may reach the internet, and nothing private: not your LAN, not the tailnet, not the other VMs
+    iifname "vmbr1" ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16, 127.0.0.0/8 } drop
+    iifname "vmbr1" meta nfproto ipv6 drop
+    oifname "vmbr1" meta nfproto ipv6 drop
+  }
+  chain input {
+    type filter hook input priority 0; policy accept;
+    # the Proxmox host offers nothing to customer VMs
+    iifname "vmbr1" ct state established,related accept
+    iifname "vmbr1" icmp type echo-request limit rate 5/second accept
+    iifname "vmbr1" drop
+  }
+}
+
+table ip cloudhost_vm_nat {
+  chain post {
+    type nat hook postrouting priority 100; policy accept;
+    ip saddr 10.77.0.0/24 oifname "vmbr0" masquerade
+  }
+}
+
+table bridge cloudhost_vm_l2 {
+  chain forward {
+    type filter hook forward priority 0; policy accept;
+    # VM-to-VM traffic on the bridge is blocked: every customer is alone on the network
+    iifname "tap*" oifname "tap*" drop
+  }
+}
