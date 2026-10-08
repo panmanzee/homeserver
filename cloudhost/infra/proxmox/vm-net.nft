@@ -35,6 +35,17 @@ table ip cloudhost_vm_nat {
 }
 
 table bridge cloudhost_vm_l2 {
+  # (tap port . IPv4 address) pairs that are allowed. Filled by cloudhost-vm-guard.sh from each VM's config.
+  set allowed {
+    type ifname . ipv4_addr
+  }
+  # anti-spoofing: a VM may only send traffic from the one address it was given
+  chain guard {
+    type filter hook prerouting priority -300; policy accept;
+    iifname "tap*" ether type ip iifname . ip saddr @allowed accept
+    iifname "tap*" ether type arp iifname . arp saddr ip @allowed accept
+    iifname "tap*" drop
+  }
   chain forward {
     type filter hook forward priority 0; policy accept;
     # VM-to-VM traffic on the bridge is blocked: every customer is alone on the network

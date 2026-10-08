@@ -32,8 +32,11 @@ Customer machines live on `vmbr1` (10.77.0.0/24), a bridge with no physical port
 | another customer VM | blocked (bridge-level rule) |
 
 Only the cloudhost server (192.168.0.102) can open connections into the VM network.
-Known gap: a VM could still spoof another VM's IP address on the bridge. Fixing that needs per-VM
-anti-spoofing rules (Proxmox firewall `ipfilter`), which is not done yet.
+Anti-spoofing: each VM's network port may only send traffic from the one IP it was given (nft bridge rule +
+`cloudhost-vm-guard.sh`, which keeps the allowed (port, IP) list in step with the running VMs every 2 seconds).
+A VM that forges another VM's address is dropped. Tested live.
+
+Snapshots: Hobby keeps 1 and Pro keeps 2 restore points per machine (thin-LVM snapshots; restore stops, rolls back, starts).
 
 ## Configuration (environment)
 

@@ -1,0 +1,8 @@
+[Unit]
+Description=Sync VM anti-spoofing rules every 2 seconds
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=2s
+AccuracySec=500ms
+[Install]
+WantedBy=timers.target

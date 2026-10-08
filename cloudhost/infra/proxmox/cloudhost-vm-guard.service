@@ -1,0 +1,6 @@
+[Unit]
+Description=Sync allowed (port, IP) pairs for customer VMs
+After=cloudhost-vm-net.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudhost-vm-guard.sh
