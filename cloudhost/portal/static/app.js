@@ -113,6 +113,7 @@ function logo() { return h('a', { class: 'logo', href: '#/' }, h('i'), 'pandeplo
 function marketingNav() {
   return h('header', { class: 'wrap nav' },
     logo(),
+    S.me ? [h('a', { class: 'link hide-s', href: '#/apps' }, 'Apps'), h('a', { class: 'link hide-s', href: '#/machines' }, 'Machines')] : null,
     h('a', { class: 'link hide-s', href: '#/pricing' }, 'Pricing'),
     themeBtn(),
     S.me
@@ -251,10 +252,11 @@ async function viewLanding(scrollTo) {
       h('div', { class: 'hero' },
         h('div', {},
           h('h1', {}, 'Your app, online in a minute.'),
-          h('p', { class: 'lede' }, 'Give us a container image. It runs on a real server in a home lab, and you get back a https address you can share.'),
+          h('p', { class: 'lede' }, 'Host a container app, or rent a whole Ubuntu virtual machine with a browser terminal. Both run on a real server in a home lab, and you get a https address you can share.'),
           h('div', { class: 'cta-row' },
             h('a', { class: 'btn', href: S.me ? '#/apps' : '#/signup' }, S.me ? 'Open dashboard' : 'Create free account'),
-            h('a', { class: 'btn ghost', href: '#/pricing' }, 'See plans')),
+            h('a', { class: 'btn ghost', href: '#/pricing' }, 'See plans'),
+            S.me ? h('a', { class: 'btn ghost', href: '#/machines' }, 'Virtual machines') : null),
           h('p', { class: 'fine' }, 'Early access. Payments are in test mode, so nothing is ever charged.')),
         heroConsole(plans)),
       h('section', { class: 'block', id: 'how' },
