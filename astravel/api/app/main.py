@@ -153,7 +153,8 @@ async def guard(request: Request, call_next):
         count_request(500)
         raise
     count_request(resp.status_code)
-    resp.headers["Cache-Control"] = "no-store"
+    if request.url.path.startswith("/api/"):          # pages and assets set their own caching (see web.py)
+        resp.headers["Cache-Control"] = "no-store"
     return resp
 
 
@@ -883,3 +884,10 @@ def admin_export(what: str, request: Request, frm: str = Query("", alias="from")
         raise HTTPException(404, "Unknown report")
     audit(u["email"], "Exported report", what, client_ip(request))
     return out
+
+
+# Serve the web app from this process when STATIC_DIR is set (single-container deployments).
+# Keep this LAST: its catch-all route must come after every /api route.
+from .web import mount_static  # noqa: E402
+
+mount_static(app)
