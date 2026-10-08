@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 
@@ -68,11 +69,57 @@ class FakeCoolify:
     async def env_delete(self, uuid, key): self.apps[uuid].setdefault("env", {}).pop(key, None)
 
 
+class FakeSocket:
+    """Stands in for the compute service's terminal WebSocket: echoes what it is sent."""
+    def __init__(self): self.q, self.sent, self.closed = [], [], False
+    async def send(self, data):
+        self.sent.append(data)
+        self.q.append(b"echo:" + (data if isinstance(data, bytes) else data.encode()))
+    def __aiter__(self): return self
+    async def __anext__(self):
+        for _ in range(200):
+            if self.q:
+                return self.q.pop(0)
+            if self.closed:
+                break
+            await asyncio.sleep(0.01)
+        raise StopAsyncIteration
+    async def close(self): self.closed = True
+
+
+class FakeCompute:
+    def __init__(self):
+        self.machines, self.n, self.calls = {}, 0, []
+    async def catalog(self):
+        return {"sizes": {"nano": {"label": "Nano", "vcpu": 1, "memory_mb": 512, "disk_gb": 8}},
+                "tiers": {"free": {"max_machines": 0, "sizes": []}, "hobby": {"max_machines": 1, "sizes": ["nano"]}},
+                "capacity": {"machines": len(self.machines)}}
+    async def list(self, t): return {"machines": [m for m in self.machines.values() if m["tenant"] == t]}
+    def _own(self, mid, t):
+        m = self.machines.get(mid)
+        if not m or m["tenant"] != t:
+            raise HTTPException(404, "Machine not found.")
+        return m
+    async def get(self, mid, t): return self._own(mid, t)
+    async def create(self, t, **body):
+        self.calls.append(("create", t, body))
+        self.n += 1
+        m = {"id": self.n, "tenant": t, "name": body["name"], "state": "running", "ip": f"10.77.0.{9 + self.n}",
+             "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----secret"}
+        self.machines[self.n] = m
+        return dict(m)
+    async def action(self, mid, t, a): self._own(mid, t); self.calls.append((a, mid)); return {"ok": True}
+    async def delete(self, mid, t): self._own(mid, t); del self.machines[mid]; return {"ok": True}
+    async def public(self, mid, t, enabled, port): self._own(mid, t); self.calls.append(("public", mid, enabled, port)); return {"ok": True}
+    async def open_terminal(self, mid, t): self._own(mid, t); self.sock = FakeSocket(); return self.sock
+
+
 @pytest.fixture()
 def env(monkeypatch):
     b, c = FakeBilling(), FakeCoolify()
     monkeypatch.setattr(main, "billing", b)
     monkeypatch.setattr(main, "coolify", c)
+    monkeypatch.setattr(main, "compute", FakeCompute())
     monkeypatch.setattr(main, "INVITE_CODE", "")
     main._fails.clear()
     with main.db() as conn:
@@ -344,3 +391,99 @@ def test_env_is_private_to_the_owner(env):
     assert other.delete(f"/api/apps/{aid}/env/A").status_code == 404
     assert c.apps[uuid].get("env", {}) == {}
     assert client().get(f"/api/apps/{aid}/env").status_code == 401
+
+
+# ---------------------------------------------------------------- virtual machines
+def test_machines_page_data_and_plan_rule(env):
+    cl = client()
+    signup(cl)
+    d = cl.get("/api/machines").json()
+    assert d["machines"] == [] and d["plan"] == "free" and d["rule"]["max_machines"] == 0
+
+
+def test_create_machine_discards_generated_private_key(env):
+    cl = client()
+    signup(cl)
+    r = cl.post("/api/machines", json={"name": "web1", "size": "nano"})
+    assert r.status_code == 200
+    assert "private_key" not in r.json()["machine"] and "BEGIN" not in r.text
+    call = main.compute.calls[0]
+    assert call[2]["generate_key"] is True and call[2]["public_key"] == ""
+
+
+def test_create_machine_with_own_key_is_passed_through(env):
+    cl = client()
+    signup(cl)
+    cl.post("/api/machines", json={"name": "web1", "size": "nano", "public_key": "ssh-ed25519 AAAA me"})
+    assert main.compute.calls[0][2]["public_key"] == "ssh-ed25519 AAAA me"
+    assert main.compute.calls[0][2]["generate_key"] is False
+
+
+def test_machine_routes_need_login(env):
+    cl = client()
+    for method, path in (("get", "/api/machines"), ("post", "/api/machines"), ("get", "/api/machines/1"),
+                         ("post", "/api/machines/1/stop"), ("delete", "/api/machines/1")):
+        assert getattr(cl, method)(path).status_code in (401, 422), path
+
+
+def test_machines_are_private_to_their_owner(env):
+    a, other = client(), client()
+    signup(a)
+    mid = a.post("/api/machines", json={"name": "mine", "size": "nano"}).json()["machine"]["id"]
+    signup(other, email="b@example.com", name="Bob")
+    assert other.get(f"/api/machines/{mid}").status_code == 404
+    assert other.post(f"/api/machines/{mid}/stop").status_code == 404
+    assert other.delete(f"/api/machines/{mid}").status_code == 404
+    assert other.put(f"/api/machines/{mid}/public", json={"enabled": True, "port": 80}).status_code == 404
+    assert other.get("/api/machines").json()["machines"] == []
+    assert a.get(f"/api/machines/{mid}").status_code == 200
+
+
+def test_machine_actions_and_delete(env):
+    cl = client()
+    signup(cl)
+    mid = cl.post("/api/machines", json={"name": "web1", "size": "nano"}).json()["machine"]["id"]
+    assert cl.post(f"/api/machines/{mid}/reboot").status_code == 200
+    assert cl.put(f"/api/machines/{mid}/public", json={"enabled": True, "port": 8080}).status_code == 200
+    assert ("public", mid, True, 8080) in main.compute.calls
+    assert cl.delete(f"/api/machines/{mid}").status_code == 200
+    assert cl.get("/api/machines").json()["machines"] == []
+
+
+def test_machine_names_cannot_collide_with_app_addresses(env):
+    cl = client()
+    signup(cl)
+    assert cl.get("/api/slug-check?slug=m-web1").json()["ok"] is False
+
+
+def test_terminal_relays_both_ways_for_the_owner(env):
+    cl = client()
+    signup(cl)
+    mid = cl.post("/api/machines", json={"name": "web1", "size": "nano"}).json()["machine"]["id"]
+    with cl.websocket_connect(f"/api/machines/{mid}/terminal") as ws:
+        ws.send_text("ls\n")
+        assert ws.receive_bytes() == b"echo:ls\n"
+        ws.send_bytes(b"\x03")
+        assert ws.receive_bytes() == b"echo:\x03"
+
+
+def test_terminal_refused_for_other_users_and_anonymous(env):
+    a, other, anon = client(), client(), client()
+    signup(a)
+    mid = a.post("/api/machines", json={"name": "web1", "size": "nano"}).json()["machine"]["id"]
+    signup(other, email="b@example.com", name="Bob")
+    from starlette.websockets import WebSocketDisconnect
+    for cl in (other, anon):
+        with pytest.raises(WebSocketDisconnect):
+            with cl.websocket_connect(f"/api/machines/{mid}/terminal") as ws:
+                ws.receive_bytes()
+
+
+def test_terminal_refuses_cross_site_origin(env):
+    cl = client()
+    signup(cl)
+    mid = cl.post("/api/machines", json={"name": "web1", "size": "nano"}).json()["machine"]["id"]
+    from starlette.websockets import WebSocketDisconnect
+    with pytest.raises(WebSocketDisconnect):
+        with cl.websocket_connect(f"/api/machines/{mid}/terminal", headers={"origin": "https://evil.example"}) as ws:
+            ws.receive_bytes()

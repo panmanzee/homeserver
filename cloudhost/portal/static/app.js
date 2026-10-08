@@ -39,6 +39,8 @@ const ICONS = {
   logs: '<path d="M4 6h16M4 12h10M4 18h16"/>',
   eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
+  cpu: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
+  term: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>',
   dice: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 8.5h.01M15.5 15.5h.01M12 12h.01"/>',
 };
 function icon(name) {
@@ -128,7 +130,7 @@ function appShell(active, ...content) {
       themeBtn()),
     h('div', { class: 'wrap shell' },
       h('nav', { class: 'side', 'aria-label': 'Dashboard' },
-        link('apps', '#/apps', 'Apps', 'apps'), link('billing', '#/billing', 'Billing', 'card'), link('account', '#/account', 'Account', 'user')),
+        link('apps', '#/apps', 'Apps', 'apps'), link('machines', '#/machines', 'Machines', 'cpu'), link('billing', '#/billing', 'Billing', 'card'), link('account', '#/account', 'Account', 'user')),
       h('main', { id: 'main', tabindex: '-1' }, ...content)));
 }
 
@@ -464,6 +466,164 @@ async function viewApps() {
   }, 4000));
 }
 
+// ───────────────────────── virtual machines
+const MSTATE = { creating: 'building', deleting: 'building', running: 'running', stopped: 'stopped', error: 'failed' };
+const MLABEL = { creating: 'Creating…', deleting: 'Deleting…', running: 'Running', stopped: 'Stopped', error: 'Failed' };
+let M = { machines: [], plan: 'free', rule: { max_machines: 0, sizes: [] }, sizes: {} };
+
+async function loadMachines() { Object.assign(M, await api('/machines')); }
+function sizeText(s) { return `${s.vcpu} vCPU · ${s.memory_mb} MB RAM · ${s.disk_gb} GB disk`; }
+
+async function viewMachines() {
+  await Promise.all([loadMe(), loadPlans()]);
+  if (!S.me) return;
+  await loadMachines();
+  mount(appShell('machines',
+    h('div', { class: 'pagehead' },
+      h('div', {}, h('h1', {}, 'Virtual machines'),
+        h('p', { class: 'muted' }, 'A whole Ubuntu computer of your own: log in, install anything, run any server. Open a terminal right here in the browser.')),
+      h('button', { class: 'btn', onclick: openCreateMachine }, icon('plus'), 'Create machine')),
+    h('div', { class: 'rack', id: 'mrack', 'aria-live': 'polite' })));
+  drawMachines();
+  S.timers.push(setInterval(async () => {
+    if (document.hidden) return;
+    try { await loadMachines(); drawMachines(); } catch (e) { if (e.status === 401) { S.me = null; location.hash = '#/login'; } }
+  }, 3000));
+}
+
+function drawMachines() {
+  const rack = $('#mrack'); if (!rack) return;
+  const r = M.rule;
+  const nodes = M.machines.map(machineUnit);
+  if (!M.machines.length) {
+    nodes.push(r.max_machines === 0
+      ? h('div', { class: 'unit empty', style: 'display:block' }, h('h3', {}, 'Machines come with the Hobby and Pro plans'),
+          h('p', { class: 'muted', style: 'margin:8px 0 14px' }, `You are on the ${M.plan} plan. Upgrade to rent a machine.`),
+          h('a', { class: 'btn', href: '#/billing' }, 'See plans'))
+      : emptyUnit('No machines yet. Create one', openCreateMachine));
+  } else if (M.machines.length < r.max_machines) {
+    nodes.push(emptyUnit('Empty slot. Create a machine', openCreateMachine));
+  }
+  rack.replaceChildren(...nodes);
+}
+
+function machineUnit(m) {
+  const busy = m.state === 'creating' || m.state === 'deleting';
+  const st = MSTATE[m.state] || 'unknown';
+  return h('article', { class: 'unit' },
+    h('div', { class: 'ear' }, h('span', { class: 'led ' + ledClass(st), title: MLABEL[m.state] || m.state })),
+    h('div', { class: 'unit-main' },
+      h('div', { class: 'unit-top' },
+        h('span', { class: 'nm' }, m.name), h('span', { class: 'state ' + st }, MLABEL[m.state] || m.state),
+        m.public ? h('a', { class: 'url', href: m.public.url, target: '_blank', rel: 'noopener' }, m.public.url.replace('https://', '')) : null),
+      h('div', { class: 'unit-actions' },
+        m.state === 'running' ? h('button', { class: 'btn sm', onclick: () => openTerminal(m) }, icon('term'), 'Terminal') : null,
+        m.state === 'running' ? h('button', { class: 'btn ghost sm', onclick: () => machineAct(m, 'reboot') }, icon('redo'), 'Reboot') : null,
+        m.state === 'running' ? h('button', { class: 'btn ghost sm', onclick: () => machineAct(m, 'stop') }, icon('stop'), 'Stop') : null,
+        m.state === 'stopped' ? h('button', { class: 'btn ghost sm', onclick: () => machineAct(m, 'start') }, icon('play'), 'Start') : null,
+        (m.state === 'running' || m.state === 'stopped') ? h('button', { class: 'btn ghost sm', onclick: () => openPublic(m) }, icon('ext'), 'Web address') : null,
+        h('button', { class: 'btn quiet sm', disabled: m.state === 'deleting', onclick: () => removeMachine(m), 'aria-label': `Delete ${m.name}` }, icon('trash'))),
+      m.state === 'error' ? h('div', { class: 'errtail' }, m.error || 'This machine could not be created. Delete it and try again.') : null,
+      h('div', { class: 'muted', style: 'font-size:13px;margin-top:10px' }, `${m.image_label} · ${sizeText(m.specs)} · private address ${m.ip}${busy ? '' : ' · login: ' + m.user}`)));
+}
+
+async function machineAct(m, action) {
+  try { await api(`/machines/${m.id}/${action}`, { method: 'POST' }); toast(action === 'stop' ? 'Shutting down…' : action === 'start' ? 'Starting…' : 'Rebooting…'); await loadMachines(); drawMachines(); }
+  catch (ex) { toast(ex.message, true); }
+}
+
+async function removeMachine(m) {
+  const ok = await confirmDialog({ title: `Delete ${m.name}?`, body: 'The machine and everything on its disk is destroyed. This cannot be undone.', confirm: 'Delete machine', danger: true, typed: m.name });
+  if (!ok) return;
+  try { await api(`/machines/${m.id}`, { method: 'DELETE' }); toast('Machine deleted'); await loadMachines(); drawMachines(); }
+  catch (ex) { toast(ex.message, true); }
+}
+
+function openCreateMachine() {
+  const r = M.rule;
+  if (r.max_machines === 0) { toast(`Machines are not part of the ${M.plan} plan.`, true); location.hash = '#/billing'; return; }
+  if (M.machines.length >= r.max_machines) { toast(`Your plan includes ${r.max_machines} machine${r.max_machines === 1 ? '' : 's'}. Upgrade to rent more.`, true); location.hash = '#/billing'; return; }
+  const name = h('input', { class: 'input', id: 'mn', maxlength: '30', autocomplete: 'off', spellcheck: 'false', placeholder: 'my-server' });
+  const sizes = r.sizes.map((k, i) => h('label', { class: 'sizepick' },
+    h('input', { type: 'radio', name: 'msize', value: k, checked: i === 0 }),
+    h('span', {}, h('strong', {}, M.sizes[k].label), h('small', {}, sizeText(M.sizes[k])))));
+  const key = h('textarea', { class: 'input mono-area', id: 'mk', rows: '2', placeholder: 'ssh-ed25519 AAAA… (optional)', autocomplete: 'off', spellcheck: 'false' });
+  const err = h('div', { class: 'formerr', role: 'alert', hidden: true });
+  const submit = h('button', { class: 'btn', type: 'submit' }, 'Create machine');
+  const form = h('form', { novalidate: true },
+    h('div', { class: 'field' }, h('label', { for: 'mn' }, 'Machine name'), name),
+    h('div', { class: 'field' }, h('label', {}, 'Size'), h('div', { class: 'sizes' }, sizes)),
+    h('div', { class: 'field' }, h('label', { for: 'mk' }, 'SSH public key ', h('span', { class: 'muted', style: 'font-weight:400' }, '(optional)')), key,
+      h('div', { class: 'hint' }, 'You can always log in with the terminal in your browser. A key is only needed if you want your own tools to connect from inside the machine network.')),
+    h('p', { class: 'hint', style: 'margin-top:16px' }, 'Ubuntu 24.04 LTS. Ready in about a minute. It can reach the internet, nothing else on our network.'),
+    err, h('div', { class: 'actions' }, h('button', { class: 'btn ghost', type: 'button', onclick: () => d.close() }, 'Cancel'), submit));
+  const d = dialog(h('div', {}, h('h2', {}, 'Create a machine'), form));
+  name.focus();
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault(); err.hidden = true;
+    if (!name.value.trim()) { name.focus(); return; }
+    submit.disabled = true; submit.replaceChildren(h('span', { class: 'spin' }), 'Creating');
+    try {
+      await api('/machines', { method: 'POST', body: { name: name.value, size: form.querySelector('input[name=msize]:checked').value, public_key: key.value } });
+      d.close(); toast('Creating your machine…'); await loadMachines(); drawMachines();
+    } catch (ex) {
+      err.textContent = ex.message; err.hidden = false; submit.disabled = false; submit.replaceChildren('Create machine');
+      if (ex.status === 402) err.append(' ', h('a', { href: '#/billing', onclick: () => d.close() }, 'See plans'));
+    }
+  });
+}
+
+function loadScript(src) {
+  return new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = rej; document.head.append(el); });
+}
+async function loadXterm() {
+  if (window.Terminal && window.FitAddon) return;
+  if (!document.getElementById('xterm-css')) document.head.append(h('link', { id: 'xterm-css', rel: 'stylesheet', href: '/static/vendor/xterm.css' }));
+  await loadScript('/static/vendor/xterm.js'); await loadScript('/static/vendor/addon-fit.js');
+}
+
+async function openTerminal(m) {
+  await loadXterm();
+  const box = h('div', { class: 'termbox' });
+  const d = dialog(h('div', {}, h('div', { class: 'termhead' }, h('h2', {}, m.name), h('button', { class: 'btn ghost sm', onclick: () => d.close() }, 'Close')), box), 'dlg termdlg');
+  const term = new window.Terminal({ cursorBlink: true, fontSize: 14, fontFamily: 'ui-monospace, "Spline Sans Mono", monospace', theme: { background: '#0B1020' } });
+  const fit = new window.FitAddon.FitAddon();
+  term.loadAddon(fit); term.open(box); fit.fit(); term.focus();
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/machines/${m.id}/terminal`);
+  ws.binaryType = 'arraybuffer';
+  const enc = new TextEncoder();
+  const sendSize = () => { try { fit.fit(); if (ws.readyState === 1) ws.send(`resize:${term.cols}x${term.rows}`); } catch (_) { /* closing */ } };
+  ws.onopen = sendSize;
+  ws.onmessage = (e) => term.write(typeof e.data === 'string' ? e.data : new Uint8Array(e.data));
+  ws.onclose = () => term.write('\r\n\x1b[90m[connection closed]\x1b[0m\r\n');
+  term.onData((data) => { if (ws.readyState === 1) ws.send(enc.encode(data)); });
+  const ro = new ResizeObserver(sendSize); ro.observe(box);
+  d.addEventListener('close', () => { ro.disconnect(); ws.close(); term.dispose(); });
+}
+
+function openPublic(m) {
+  const on = h('input', { type: 'checkbox', id: 'pw', checked: !!m.public });
+  const port = h('input', { class: 'input', id: 'pp', type: 'number', min: '1', max: '65535', value: String(m.public ? m.public.port : 80) });
+  const link = h('div', { class: 'hint' }, m.public ? m.public.url : 'Off. Only you can reach the machine, through the terminal.');
+  const err = h('div', { class: 'formerr', role: 'alert', hidden: true });
+  const save = h('button', { class: 'btn', type: 'submit' }, 'Save');
+  const form = h('form', { novalidate: true },
+    h('div', { class: 'field' }, h('label', { class: 'switchrow' }, on, h('span', {}, 'Give this machine a public https address'))),
+    h('div', { class: 'field' }, h('label', { for: 'pp' }, 'Port your web server listens on'), port, link),
+    h('p', { class: 'hint', style: 'margin-top:14px' }, 'Start a web server on that port inside the machine (for example nginx or python3 -m http.server 8080). Anyone on the internet can open the address.'),
+    err, h('div', { class: 'actions' }, h('button', { class: 'btn ghost', type: 'button', onclick: () => d.close() }, 'Close'), save));
+  const d = dialog(h('div', {}, h('h2', {}, `Web address for ${m.name}`), form));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault(); err.hidden = true; save.disabled = true;
+    try {
+      const res = await api(`/machines/${m.id}/public`, { method: 'PUT', body: { enabled: on.checked, port: Number(port.value) } });
+      m.public = res.public; link.textContent = res.public ? res.public.url : 'Off. Only you can reach the machine, through the terminal.';
+      toast(res.public ? 'Web address is live' : 'Web address removed'); await loadMachines(); drawMachines();
+    } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    save.disabled = false;
+  });
+}
+
 // environment variables
 function parseEnvText(text) {
   const env = {};
@@ -712,7 +872,7 @@ function mount(node) {
   document.querySelectorAll('dialog').forEach((d) => d.close());
   $('#app').replaceChildren(node);
 }
-const PROTECTED = new Set(['apps', 'billing', 'account']);
+const PROTECTED = new Set(['apps', 'machines', 'billing', 'account']);
 async function route() {
   stopTimers();
   const key = (location.hash.replace(/^#\/?/, '') || '').split('?')[0];
@@ -727,6 +887,7 @@ async function route() {
     else if (key === 'login') viewAuth('login');
     else if (key === 'signup') viewAuth('signup');
     else if (key === 'apps') await viewApps();
+    else if (key === 'machines') await viewMachines();
     else if (key === 'billing') await viewBilling();
     else if (key === 'account') await viewAccount();
     else location.hash = '#/';

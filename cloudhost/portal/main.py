@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import WebSocket, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -37,6 +37,8 @@ COOLIFY_TOKEN = os.environ.get("COOLIFY_API_TOKEN", "")
 PROJECT_UUID = os.environ.get("COOLIFY_PROJECT_UUID", "")
 SERVER_UUID = os.environ.get("COOLIFY_SERVER_UUID", "")
 ENV_NAME = os.environ.get("COOLIFY_ENV_NAME", "production")
+COMPUTE_URL = os.environ.get("COMPUTE_URL", "http://cloudhost-compute:8110")
+COMPUTE_KEY = os.environ.get("COMPUTE_KEY", "")
 BASE_DOMAIN = os.environ.get("BASE_DOMAIN", "pandeploy.dev")
 INVITE_CODE = os.environ.get("INVITE_CODE", "")          # empty = open sign-up
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "1") == "1"
@@ -212,8 +214,51 @@ class Coolify:
         return await self._req("DELETE", f"/applications/{uuid}", params={"delete_configurations": "true", "delete_volumes": "true", "docker_cleanup": "true"})
 
 
+class Compute:
+    """Virtual machines live in the compute service; the portal only asks it on behalf of a signed-in user."""
+    def _h(self): return {"x-service-key": COMPUTE_KEY}
+
+    async def _req(self, method, path, **kw):
+        try:
+            async with httpx.AsyncClient(timeout=60) as c:
+                r = await c.request(method, f"{COMPUTE_URL}{path}", headers=self._h(), **kw)
+        except httpx.HTTPError:
+            raise HTTPException(502, "The machine service is not reachable right now. Try again in a moment.")
+        if r.status_code >= 300:
+            if r.status_code >= 500 or r.status_code in (401, 403):
+                log.warning("compute %s %s -> %s", method, path, r.status_code)
+                raise HTTPException(502 if r.status_code != 503 else 503,
+                                    "The machine service could not do that right now. Try again in a moment."
+                                    if r.status_code != 503 else _detail(r))
+            raise HTTPException(r.status_code, _detail(r))
+        return r.json()
+
+    async def catalog(self): return await self._req("GET", "/catalog")
+    async def list(self, t): return await self._req("GET", "/machines", params={"tenant": t})
+    async def get(self, mid, t): return await self._req("GET", f"/machines/{mid}", params={"tenant": t})
+    async def create(self, t, **body): return await self._req("POST", "/machines", json={"tenant": t, **body})
+    async def action(self, mid, t, a): return await self._req("POST", f"/machines/{mid}/{a}", params={"tenant": t})
+    async def delete(self, mid, t): return await self._req("DELETE", f"/machines/{mid}", params={"tenant": t})
+    async def public(self, mid, t, enabled, port):
+        return await self._req("PUT", f"/machines/{mid}/public", params={"tenant": t}, json={"enabled": enabled, "port": port})
+
+    async def open_terminal(self, mid, t):
+        import websockets
+        url = COMPUTE_URL.replace("http://", "ws://").replace("https://", "wss://")
+        return await websockets.connect(f"{url}/ws/machines/{mid}/terminal?tenant={t}", additional_headers=self._h(), max_size=2**20)
+
+
+def _detail(r):
+    try:
+        d = r.json().get("detail")
+        return d if isinstance(d, str) else "That was not accepted."
+    except Exception:
+        return "That was not accepted."
+
+
 billing = Billing()
 coolify = Coolify()
+compute = Compute()
 
 
 # --------------------------------------------------------------------- app state
@@ -425,7 +470,7 @@ def slug_check(slug: str = ""):
     s = slug.strip().lower()
     if not SLUG_RE.match(s):
         return {"ok": False, "reason": "Use 3–30 lowercase letters, numbers or hyphens, starting with a letter."}
-    if s in RESERVED:
+    if s in RESERVED or s.startswith("m-"):
         return {"ok": False, "reason": "That name is reserved."}
     with db() as c:
         taken = c.execute("SELECT 1 FROM apps WHERE slug=?", (s,)).fetchone()
@@ -643,6 +688,113 @@ async def delete_app(app_id: int, request: Request):
     with db() as c:
         c.execute("DELETE FROM apps WHERE id=?", (app_id,))
     return {"ok": True}
+
+
+# --------------------------------------------------------------------- virtual machines
+class MachineIn(BaseModel):
+    name: str
+    size: str = "nano"
+    public_key: str = ""
+
+
+class PublicIn(BaseModel):
+    enabled: bool
+    port: int = 80
+
+
+@app.get("/api/machines")
+async def list_machines(request: Request):
+    u = current_user(request)
+    t = tenant(u)
+    mine, catalog, q = await asyncio.gather(compute.list(t), compute.catalog(), billing.quota(t))
+    rule = catalog["tiers"].get(q["tier"], {"max_machines": 0, "sizes": []})
+    return {"machines": mine["machines"], "plan": q["tier"], "rule": rule, "sizes": catalog["sizes"],
+            "capacity": catalog["capacity"]}
+
+
+@app.post("/api/machines")
+async def create_machine(body: MachineIn, request: Request):
+    u = current_user(request)
+    key = body.public_key.strip()
+    # No key given: the platform generates one and discards the private half. Customers use the web
+    # terminal; a key they paste lets their own tools log in from inside the machine network.
+    created = await compute.create(tenant(u), name=body.name, size=body.size, public_key=key, generate_key=not key)
+    created.pop("private_key", None)
+    return {"machine": created}
+
+
+@app.get("/api/machines/{mid}")
+async def get_machine(mid: int, request: Request):
+    return await compute.get(mid, tenant(current_user(request)))
+
+
+@app.post("/api/machines/{mid}/{action}")
+async def machine_action(mid: int, action: str, request: Request):
+    return await compute.action(mid, tenant(current_user(request)), action)
+
+
+@app.delete("/api/machines/{mid}")
+async def delete_machine(mid: int, request: Request):
+    return await compute.delete(mid, tenant(current_user(request)))
+
+
+@app.put("/api/machines/{mid}/public")
+async def machine_public(mid: int, body: PublicIn, request: Request):
+    return await compute.public(mid, tenant(current_user(request)), body.enabled, body.port)
+
+
+@app.websocket("/api/machines/{mid}/terminal")
+async def machine_terminal(ws: WebSocket, mid: int):
+    """Browser terminal: relays the signed-in owner's keystrokes to the compute service's SSH session."""
+    origin, host = ws.headers.get("origin"), ws.headers.get("host", "")
+    if origin and origin.split("://", 1)[-1] != host:          # cross-site WebSocket hijacking guard
+        await ws.close(code=4403)
+        return
+    try:
+        u = current_user(ws)
+        t = tenant(u)
+        m = await compute.get(mid, t)                          # also proves the machine belongs to this user
+    except HTTPException:
+        await ws.close(code=4401)
+        return
+    await ws.accept()
+    if m["state"] != "running":
+        await ws.send_text("\r\n[the machine is not running]\r\n")
+        await ws.close()
+        return
+    try:
+        up = await compute.open_terminal(mid, t)
+    except Exception:
+        await ws.send_text("\r\n[could not reach the machine]\r\n")
+        await ws.close()
+        return
+
+    async def down():                      # machine -> browser
+        try:
+            async for data in up:
+                await (ws.send_bytes(data) if isinstance(data, bytes) else ws.send_text(data))
+        except Exception:
+            pass
+
+    pump = asyncio.create_task(down())
+    try:
+        while not pump.done():
+            msg = await ws.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            if msg.get("bytes") is not None:
+                await up.send(msg["bytes"])
+            elif msg.get("text") is not None:
+                await up.send(msg["text"][:4096])
+    except Exception:
+        pass
+    finally:
+        pump.cancel()
+        try:
+            await up.close()
+            await ws.close()
+        except Exception:
+            pass
 
 
 # ------------------------------------------------------------------------ static

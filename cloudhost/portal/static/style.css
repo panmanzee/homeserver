@@ -276,3 +276,16 @@ textarea.input { padding: 12px 14px; min-height: 84px; resize: vertical; line-he
 .envrow code { font-family: var(--mono, ui-monospace, monospace); font-size: 13px; flex: 1; overflow-wrap: anywhere; }
 .envform .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 @media (max-width: 520px) { .envform .input-row { grid-template-columns: 1fr; } }
+
+/* virtual machines */
+.sizes { display: grid; gap: 8px; }
+.sizepick { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); cursor: pointer; }
+.sizepick:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.sizepick span { display: grid; }
+.sizepick small { color: var(--muted); font-size: 13px; }
+.switchrow { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.termdlg { width: min(900px, calc(100vw - 24px)); }
+.termhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.termhead h2 { margin: 0; }
+.termbox { height: min(520px, 60vh); background: #0B1020; border-radius: 12px; padding: 10px; overflow: hidden; }
+.termbox .xterm-viewport { background-color: transparent !important; }
