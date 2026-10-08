@@ -201,6 +201,17 @@ class Coolify:
             if e.get("key") == key:
                 await self._req("DELETE", f"/applications/{uuid}/envs/{e['uuid']}", quiet=True)
 
+    async def storages(self, uuid):
+        d = await self._req("GET", f"/applications/{uuid}/storages")
+        return d.get("persistent_storages", []) if isinstance(d, dict) else []
+
+    async def storage_add(self, uuid, mount_path, name):
+        return await self._req("POST", f"/applications/{uuid}/storages",
+                               json={"type": "persistent", "name": name, "mount_path": mount_path})
+
+    async def storage_delete(self, uuid, storage_uuid):
+        return await self._req("DELETE", f"/applications/{uuid}/storages/{storage_uuid}")
+
     async def env_set(self, uuid, key, value):
         await self.env_delete(uuid, key)          # replace = delete + create
         await self._req("POST", f"/applications/{uuid}/envs", quiet=True, json={
@@ -672,6 +683,66 @@ async def app_action(app_id: int, action: str, request: Request):
     row = owned_app(u, app_id)
     await coolify.action(row["coolify_uuid"], action)
     return {"ok": True}
+
+
+VOLUMES_PER_APP = {"free": 0, "hobby": 1, "pro": 2}
+VOL_PATH_RE = re.compile(r"^/[A-Za-z0-9._/-]{1,100}$")
+VOL_BLOCKED = {"/", "/proc", "/sys", "/dev", "/etc", "/bin", "/sbin", "/usr", "/lib", "/lib64", "/boot", "/run", "/var/run",
+               "/root", "/var", "/tmp"}
+
+
+def check_mount(path: str) -> str:
+    p = path.strip().rstrip("/") or "/"
+    if not VOL_PATH_RE.match(p) or ".." in p.split("/") or "//" in p:
+        raise HTTPException(422, "Use a folder path like /data or /app/uploads.")
+    if p in VOL_BLOCKED or any(p.startswith(b + "/") for b in ("/proc", "/sys", "/dev", "/etc", "/bin", "/sbin", "/lib", "/boot", "/run")):
+        raise HTTPException(422, f"{p} is a system folder. Pick a folder of your own, like /data.")
+    return p
+
+
+class VolumeIn(BaseModel):
+    mount_path: str
+
+
+def _vols(rows):
+    return [{"mount_path": r["mount_path"]} for r in rows]
+
+
+@app.get("/api/apps/{app_id}/storage")
+async def list_storage(app_id: int, request: Request):
+    u = current_user(request)
+    row = owned_app(u, app_id)
+    q = await billing.quota(tenant(u))
+    return {"volumes": _vols(await coolify.storages(row["coolify_uuid"])), "limit": VOLUMES_PER_APP.get(q["tier"], 0), "plan": q["tier"]}
+
+
+@app.put("/api/apps/{app_id}/storage")
+async def add_storage(app_id: int, body: VolumeIn, request: Request):
+    u = current_user(request)
+    row = owned_app(u, app_id)
+    path = check_mount(body.mount_path)
+    q = await billing.quota(tenant(u))
+    limit = VOLUMES_PER_APP.get(q["tier"], 0)
+    have = await coolify.storages(row["coolify_uuid"])
+    if any(v["mount_path"] == path for v in have):
+        raise HTTPException(409, "That folder already has a disk.")
+    if limit == 0:
+        raise HTTPException(402, "Persistent disks are not part of the Free plan. Upgrade to keep files across restarts.")
+    if len(have) >= limit:
+        raise HTTPException(402, f"Your {q['limits']['name']} plan includes {limit} disk{'s' if limit != 1 else ''} per app.")
+    await coolify.storage_add(row["coolify_uuid"], path, f"disk{len(have) + 1}-{secrets.token_hex(3)}")
+    return {"volumes": _vols(await coolify.storages(row["coolify_uuid"])), "limit": limit, "restart_needed": True}
+
+
+@app.delete("/api/apps/{app_id}/storage")
+async def delete_storage(app_id: int, path: str, request: Request):
+    row = owned_app(current_user(request), app_id)
+    path = check_mount(path)
+    hit = [v for v in await coolify.storages(row["coolify_uuid"]) if v["mount_path"] == path]
+    if not hit:
+        raise HTTPException(404, "No disk at that folder.")
+    await coolify.storage_delete(row["coolify_uuid"], hit[0]["uuid"])
+    return {"ok": True, "restart_needed": True}
 
 
 @app.get("/api/apps/{app_id}/env")

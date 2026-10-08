@@ -414,6 +414,7 @@ function unit(a) {
         h('button', { class: 'btn ghost sm', onclick: () => copyText(a.url) }, icon('copy'), 'Copy link'),
         h('button', { class: 'btn ghost sm', onclick: () => appAction(a, 'restart') }, icon('redo'), 'Restart'), stopStart,
         h('button', { class: 'btn ghost sm', onclick: () => openEnv(a) }, icon('key'), 'Variables'),
+        h('button', { class: 'btn ghost sm', onclick: () => openDisks(a) }, icon('apps'), 'Disks'),
         h('button', { class: 'btn ghost sm', 'aria-expanded': String(open), onclick: () => {
           S.ui.open[a.id] = !open; if (!S.ui.logs[a.id]) S.ui.logs[a.id] = { kind: 'runtime', text: 'Loading…' };
           drawRack(); if (!open) refreshApps(); } }, icon('logs'), open ? 'Hide logs' : 'Logs'),
@@ -662,6 +663,39 @@ function openPublic(m) {
     } catch (ex) { err.textContent = ex.message; err.hidden = false; }
     save.disabled = false;
   });
+}
+
+// persistent disks
+async function openDisks(a) {
+  const list = h('div', { class: 'envlist' }, h('p', { class: 'muted' }, 'Loading…'));
+  const path = h('input', { class: 'input', id: 'dkp', placeholder: '/data', autocomplete: 'off', spellcheck: 'false', maxlength: '100' });
+  const err = h('div', { class: 'formerr', role: 'alert', hidden: true });
+  const note = h('p', { class: 'hint', hidden: true }, 'Saved. Restart the app so it mounts the disk.');
+  const add = h('button', { class: 'btn', type: 'submit' }, 'Add disk');
+  let info = { volumes: [], limit: 0, plan: 'free' };
+  const draw = () => {
+    list.replaceChildren(...(info.volumes.length ? info.volumes.map((v) => h('div', { class: 'envrow' }, h('code', {}, v.mount_path), h('span', { class: 'muted' }, 'kept across restarts'),
+      h('button', { class: 'btn quiet sm', type: 'button', 'aria-label': `Delete disk at ${v.mount_path}`, onclick: async () => {
+        if (!await confirmDialog({ title: `Delete the disk at ${v.mount_path}?`, body: 'Everything stored on it is destroyed. This cannot be undone.', confirm: 'Delete disk', danger: true })) return;
+        try { await api(`/apps/${a.id}/storage?path=${encodeURIComponent(v.mount_path)}`, { method: 'DELETE' }); note.hidden = false; await load(); } catch (ex) { toast(ex.message, true); } } }, icon('trash'))))
+      : [h('p', { class: 'muted' }, info.limit ? 'No disks yet.' : 'Persistent disks are part of the Hobby and Pro plans.')]));
+    add.disabled = !info.limit || info.volumes.length >= info.limit;
+  };
+  const load = async () => { try { info = await api(`/apps/${a.id}/storage`); draw(); } catch (ex) { list.replaceChildren(h('p', { class: 'muted' }, ex.message)); } };
+  const form = h('form', { novalidate: true }, h('div', { class: 'field' }, h('label', { for: 'dkp' }, 'Folder inside your app to keep'), h('div', { class: 'input-row' }, path, add)), err);
+  const d = dialog(h('div', {}, h('h2', {}, `Disks for ${a.name}`),
+    h('p', { class: 'muted' }, 'Without a disk, files an app writes are lost when it restarts. A disk keeps one folder (for example /data or /app/uploads). There is no hard size cap yet, so keep it modest.'),
+    list, form, note,
+    h('div', { class: 'actions' }, h('button', { class: 'btn ghost', type: 'button', onclick: () => d.close() }, 'Close'),
+      h('button', { class: 'btn', type: 'button', onclick: async () => { await appAction(a, 'restart'); d.close(); } }, icon('redo'), 'Restart to apply'))));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault(); err.hidden = true;
+    if (!path.value.trim()) { path.focus(); return; }
+    add.disabled = true;
+    try { info = await api(`/apps/${a.id}/storage`, { method: 'PUT', body: { mount_path: path.value } }); path.value = ''; note.hidden = false; draw(); }
+    catch (ex) { err.textContent = ex.message; err.hidden = false; draw(); }
+  });
+  load();
 }
 
 // environment variables

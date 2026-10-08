@@ -65,6 +65,9 @@ class FakeCoolify:
             out += [{"key": k, "value": v, "uuid": f"{k}-main", "is_preview": False},
                     {"key": k, "value": v, "uuid": f"{k}-prev", "is_preview": True}]
         return out
+    async def storages(self, uuid): return list(self.apps[uuid].setdefault("vols", []))
+    async def storage_add(self, uuid, mount_path, name): self.apps[uuid].setdefault("vols", []).append({"mount_path": mount_path, "uuid": name})
+    async def storage_delete(self, uuid, sid): self.apps[uuid]["vols"] = [v for v in self.apps[uuid]["vols"] if v["uuid"] != sid]
     async def env_set(self, uuid, key, value): self.apps[uuid].setdefault("env", {})[key] = value
     async def env_delete(self, uuid, key): self.apps[uuid].setdefault("env", {}).pop(key, None)
 
@@ -538,3 +541,49 @@ def test_password_reset_is_disabled_without_invite_code_and_throttled(env, monke
     for _ in range(10):
         bad.post("/api/reset", json={"email": "a@example.com", "invite": "guess", "password": "a brand new password"})
     assert bad.post("/api/reset", json={"email": "a@example.com", "invite": "letmein", "password": "a brand new password"}).status_code == 429
+
+
+# ---------------------------------------------------------------- persistent disks
+def test_disk_rules_by_plan(env):
+    b, c = env
+    cl = client()
+    aid, uuid = deployed(cl, c)
+    r = cl.put(f"/api/apps/{aid}/storage", json={"mount_path": "/data"})
+    assert r.status_code == 402 and "Free plan" in r.json()["detail"]
+    assert cl.get(f"/api/apps/{aid}/storage").json() == {"volumes": [], "limit": 0, "plan": "free"}
+
+
+def test_disk_add_list_delete_on_hobby(env):
+    b, c = env
+    cl = client()
+    aid, uuid = deployed(cl, c)
+    cl.post("/api/subscribe", json={"tier": "hobby"})
+    r = cl.put(f"/api/apps/{aid}/storage", json={"mount_path": "/data/"})
+    assert r.status_code == 200 and r.json()["volumes"] == [{"mount_path": "/data"}] and r.json()["restart_needed"]
+    assert cl.put(f"/api/apps/{aid}/storage", json={"mount_path": "/data"}).status_code == 409
+    assert cl.put(f"/api/apps/{aid}/storage", json={"mount_path": "/other"}).status_code == 402        # hobby: 1 disk
+    assert cl.delete(f"/api/apps/{aid}/storage", params={"path": "/data"}).status_code == 200
+    assert cl.get(f"/api/apps/{aid}/storage").json()["volumes"] == []
+    assert cl.delete(f"/api/apps/{aid}/storage", params={"path": "/data"}).status_code == 404
+
+
+def test_disk_path_rules(env):
+    b, c = env
+    cl = client()
+    aid, uuid = deployed(cl, c)
+    cl.post("/api/subscribe", json={"tier": "hobby"})
+    for bad in ("data", "/", "/etc", "/etc/passwd", "/proc/1", "/usr", "/var", "/tmp", "/a/../etc", "/a//b", "/has space", "/x;rm", ""):
+        assert cl.put(f"/api/apps/{aid}/storage", json={"mount_path": bad}).status_code == 422, bad
+
+
+def test_disks_are_private_to_the_owner(env):
+    b, c = env
+    a, other = client(), client()
+    aid, uuid = deployed(a, c)
+    a.post("/api/subscribe", json={"tier": "hobby"})
+    a.put(f"/api/apps/{aid}/storage", json={"mount_path": "/data"})
+    signup(other, email="b@example.com", name="Bob")
+    assert other.get(f"/api/apps/{aid}/storage").status_code == 404
+    assert other.put(f"/api/apps/{aid}/storage", json={"mount_path": "/x"}).status_code == 404
+    assert other.delete(f"/api/apps/{aid}/storage", params={"path": "/data"}).status_code == 404
+    assert len(c.apps[uuid]["vols"]) == 1
