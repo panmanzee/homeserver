@@ -38,6 +38,7 @@ const ICONS = {
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   logs: '<path d="M4 6h16M4 12h10M4 18h16"/>',
   eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
   dice: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 8.5h.01M15.5 15.5h.01M12 12h.01"/>',
 };
 function icon(name) {
@@ -404,6 +405,7 @@ function unit(a) {
         h('a', { class: 'btn sm', href: a.url, target: '_blank', rel: 'noopener' }, icon('ext'), 'Open'),
         h('button', { class: 'btn ghost sm', onclick: () => copyText(a.url) }, icon('copy'), 'Copy link'),
         h('button', { class: 'btn ghost sm', onclick: () => appAction(a, 'restart') }, icon('redo'), 'Restart'), stopStart,
+        h('button', { class: 'btn ghost sm', onclick: () => openEnv(a) }, icon('key'), 'Variables'),
         h('button', { class: 'btn ghost sm', 'aria-expanded': String(open), onclick: () => {
           S.ui.open[a.id] = !open; if (!S.ui.logs[a.id]) S.ui.logs[a.id] = { kind: 'runtime', text: 'Loading…' };
           drawRack(); if (!open) refreshApps(); } }, icon('logs'), open ? 'Hide logs' : 'Logs'),
@@ -462,6 +464,59 @@ async function viewApps() {
   }, 4000));
 }
 
+// environment variables
+function parseEnvText(text) {
+  const env = {};
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq < 1) return { error: `Line ${i + 1}: write it as NAME=value.` };
+    let value = line.slice(eq + 1).trim();
+    if (value.length >= 2 && ((value[0] === '"' && value.endsWith('"')) || (value[0] === "'" && value.endsWith("'")))) value = value.slice(1, -1);
+    env[line.slice(0, eq).trim()] = value;
+  }
+  return { env };
+}
+async function openEnv(a) {
+  const list = h('div', { class: 'envlist' }, h('p', { class: 'muted' }, 'Loading…'));
+  const key = h('input', { class: 'input', id: 'ek', placeholder: 'NAME', autocomplete: 'off', spellcheck: 'false', maxlength: '64' });
+  const val = h('input', { class: 'input', id: 'ev', type: 'password', placeholder: 'value', autocomplete: 'new-password', spellcheck: 'false' });
+  const err = h('div', { class: 'formerr', role: 'alert', hidden: true });
+  const note = h('p', { class: 'hint', hidden: true }, 'Saved. Restart the app so it picks up the change.');
+  const save = h('button', { class: 'btn', type: 'submit' }, 'Save');
+  const draw = (keys) => list.replaceChildren(...(keys.length
+    ? keys.map((k) => h('div', { class: 'envrow' }, h('code', {}, k),
+        h('span', { class: 'muted' }, '••••••••'),
+        h('button', { class: 'btn quiet sm', type: 'button', 'aria-label': `Delete ${k}`, onclick: async () => {
+          try { await api(`/apps/${a.id}/env/${encodeURIComponent(k)}`, { method: 'DELETE' }); note.hidden = false; load(); }
+          catch (ex) { toast(ex.message, true); } } }, icon('trash'))))
+    : [h('p', { class: 'muted' }, 'No variables yet.')]));
+  const load = async () => {
+    try { draw((await api(`/apps/${a.id}/env`)).env.map((e) => e.key)); }
+    catch (ex) { list.replaceChildren(h('p', { class: 'muted' }, ex.message)); }
+  };
+  const form = h('form', { novalidate: true, class: 'envform' },
+    h('div', { class: 'field' }, h('label', { for: 'ek' }, 'Add or replace a variable'), h('div', { class: 'input-row' }, key, val)), err, h('div', { class: 'actions' }, save));
+  const d = dialog(h('div', {},
+    h('h2', {}, `Variables for ${a.name}`),
+    h('p', { class: 'muted' }, 'Passwords, database addresses and API keys go here. Values are write-only: you can replace or delete them, but they are never shown again.'),
+    list, form, note,
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn ghost', type: 'button', onclick: () => d.close() }, 'Close'),
+      h('button', { class: 'btn', type: 'button', onclick: async () => { await appAction(a, 'restart'); d.close(); } }, icon('redo'), 'Restart to apply'))));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault(); err.hidden = true;
+    if (!key.value.trim()) { key.focus(); return; }
+    save.disabled = true;
+    try { await api(`/apps/${a.id}/env`, { method: 'PUT', body: { key: key.value, value: val.value } }); key.value = ''; val.value = ''; note.hidden = false; await load(); }
+    catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    save.disabled = false;
+  });
+  load();
+}
+
 // deploy dialog
 function openDeploy(prefill = {}) {
   const l = S.me.limits;
@@ -473,6 +528,7 @@ function openDeploy(prefill = {}) {
   const msg = h('div', { class: 'hint', id: 'dn-m' }, 'This becomes your address.');
   const image = h('input', { class: 'input', id: 'di', value: prefill.image || 'nginx:alpine', autocomplete: 'off', spellcheck: 'false' });
   const port = h('input', { class: 'input', id: 'dp', type: 'number', min: '1', max: '65535', value: '80' });
+  const envBox = h('textarea', { class: 'input mono-area', id: 'de', rows: '3', placeholder: 'KEY=value', autocomplete: 'off', spellcheck: 'false' });
   const err = h('div', { class: 'formerr', role: 'alert', hidden: true });
   let t;
   const validate = () => {
@@ -496,6 +552,8 @@ function openDeploy(prefill = {}) {
     h('div', { class: 'field' }, h('label', { for: 'di' }, 'Container image'), image,
       h('div', { class: 'chips', style: 'margin:4px 0 0' }, picks), h('div', { class: 'hint' }, 'From Docker Hub, ghcr.io or quay.io. Add a tag like :1.0 if you need one.')),
     h('div', { class: 'field' }, h('label', { for: 'dp' }, 'Port your app listens on'), port),
+    h('div', { class: 'field' }, h('label', { for: 'de' }, 'Environment variables ', h('span', { class: 'muted', style: 'font-weight:400' }, '(optional)')), envBox,
+      h('div', { class: 'hint' }, 'One per line, like DATABASE_URL=postgres://… Values are write-only: you can replace or delete them later, but not read them back. No single quotes or line breaks in values.')),
     h('p', { class: 'hint', style: 'margin-top:16px' }, `Runs with ${l.cpu_limit} CPU and ${l.memory_limit_mb} MB RAM on the ${l.name} plan.`),
     err,
     h('div', { class: 'actions' }, h('button', { class: 'btn ghost', type: 'button', onclick: () => d.close() }, 'Cancel'), submit));
@@ -506,9 +564,11 @@ function openDeploy(prefill = {}) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault(); err.hidden = true;
     if (!name.value.trim()) { name.focus(); msg.textContent = 'Enter a name for your app.'; msg.style.color = 'var(--fail)'; return; }
+    const parsed = parseEnvText(envBox.value);
+    if (parsed.error) { err.textContent = parsed.error; err.hidden = false; envBox.focus(); return; }
     submit.disabled = true; submit.replaceChildren(h('span', { class: 'spin' }), 'Deploying');
     try {
-      const res = await api('/apps', { method: 'POST', body: { name: name.value, image: image.value, port: Number(port.value) } });
+      const res = await api('/apps', { method: 'POST', body: { name: name.value, image: image.value, port: Number(port.value), env: parsed.env } });
       await loadMe();
       showProgress(d, body, res.app);
     } catch (ex) {

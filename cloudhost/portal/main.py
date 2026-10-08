@@ -171,11 +171,12 @@ class Billing:
 class Coolify:
     def _h(self): return {"Authorization": f"Bearer {COOLIFY_TOKEN}", "Content-Type": "application/json"}
 
-    async def _req(self, method, path, **kw):
+    async def _req(self, method, path, quiet=False, **kw):
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.request(method, f"{COOLIFY_URL}/api/v1{path}", headers=self._h(), **kw)
         if r.status_code >= 300:
-            log.warning("coolify %s %s -> %s %s", method, path, r.status_code, r.text[:200])
+            # quiet=True for anything that carries customer secrets: log the status only, never the body
+            log.warning("coolify %s %s -> %s %s", method, path, r.status_code, "" if quiet else r.text[:200])
             raise HTTPException(502, "The hosting engine rejected the request. Try again in a moment.")
         return r.json()
 
@@ -188,6 +189,20 @@ class Coolify:
             "custom_docker_run_options": RUN_OPTIONS, "instant_deploy": False})
 
     async def get(self, uuid): return await self._req("GET", f"/applications/{uuid}")
+
+    # Environment variables. Coolify keeps a second "preview" copy of every variable; we manage both.
+    async def envs(self, uuid):
+        return await self._req("GET", f"/applications/{uuid}/envs", quiet=True)
+
+    async def env_delete(self, uuid, key):
+        for e in await self.envs(uuid):
+            if e.get("key") == key:
+                await self._req("DELETE", f"/applications/{uuid}/envs/{e['uuid']}", quiet=True)
+
+    async def env_set(self, uuid, key, value):
+        await self.env_delete(uuid, key)          # replace = delete + create
+        await self._req("POST", f"/applications/{uuid}/envs", quiet=True, json={
+            "key": key, "value": value, "is_preview": False, "is_literal": True, "is_buildtime": False})
     async def deployments(self, uuid):
         d = await self._req("GET", f"/deployments/applications/{uuid}")
         return d.get("deployments", []) if isinstance(d, dict) else d
@@ -274,6 +289,12 @@ class DeployIn(BaseModel):
     name: str
     image: str
     port: int = 80
+    env: dict[str, str] = {}
+
+
+class EnvIn(BaseModel):
+    key: str
+    value: str
 
 
 class SubscribeIn(BaseModel):
@@ -472,6 +493,29 @@ async def get_app(app_id: int, request: Request):
     return await describe(owned_app(current_user(request), app_id))
 
 
+ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+ENV_MAX_VARS = 50
+ENV_MAX_VALUE = 4096
+ENV_RESERVED_PREFIXES = ("COOLIFY_", "SERVICE_", "LD_")
+ENV_RESERVED = {"PATH", "HOME", "HOSTNAME"}
+
+
+def check_env(key: str, value: str) -> str:
+    """Return the cleaned key, or raise 422 with a message the customer can act on."""
+    key = key.strip()
+    if not ENV_KEY_RE.match(key):
+        raise HTTPException(422, "Variable names use letters, numbers and underscores, and cannot start with a number.")
+    if key.upper().startswith(ENV_RESERVED_PREFIXES) or key.upper() in ENV_RESERVED:
+        raise HTTPException(422, f"{key} is reserved by the platform. Pick another name.")
+    if len(value) > ENV_MAX_VALUE or "\x00" in value:
+        raise HTTPException(422, f"Values can be up to {ENV_MAX_VALUE} characters.")
+    # The hosting engine writes values into a quoted .env file; a single quote or a line break would break
+    # that file and fail every deploy of the app (found in live testing), so refuse them with a clear reason.
+    if "'" in value or "\n" in value or "\r" in value:
+        raise HTTPException(422, "Values cannot contain a single quote (') or a line break. URL-encode them if you need those characters.")
+    return key
+
+
 def parse_image(raw: str):
     raw = raw.strip().lower()
     if "@" in raw or " " in raw or len(raw) > 200:
@@ -500,6 +544,9 @@ async def deploy(body: DeployIn, request: Request):
     if not 1 <= body.port <= 65535:
         raise HTTPException(422, "Port must be between 1 and 65535.")
     image, tag = parse_image(body.image)
+    if len(body.env) > ENV_MAX_VARS:
+        raise HTTPException(422, f"You can set up to {ENV_MAX_VARS} variables.")
+    env = {check_env(k, v): v for k, v in body.env.items()}
 
     q = await billing.quota(tenant(u))
     if q["apps_used"] >= q["limits"]["max_apps"]:
@@ -521,6 +568,12 @@ async def deploy(body: DeployIn, request: Request):
         await billing.unregister(uuid)
         await coolify.delete(uuid)
         raise HTTPException(409, "That name was just taken. Pick another.")
+    try:
+        for k, v in env.items():
+            await coolify.env_set(uuid, k, v)
+    except HTTPException:
+        # the app exists but would start without its configuration: say so instead of running it half-set
+        raise HTTPException(502, "The app was created, but its variables could not be saved. Open Variables, add them, then start it.")
     await coolify.action(uuid, "start")
     with db() as c:
         row = c.execute("SELECT * FROM apps WHERE slug=?", (slug,)).fetchone()
@@ -536,6 +589,33 @@ async def app_action(app_id: int, action: str, request: Request):
     row = owned_app(u, app_id)
     await coolify.action(row["coolify_uuid"], action)
     return {"ok": True}
+
+
+@app.get("/api/apps/{app_id}/env")
+async def list_env(app_id: int, request: Request):
+    row = owned_app(current_user(request), app_id)
+    keys = sorted({e["key"] for e in await coolify.envs(row["coolify_uuid"]) if not e.get("is_preview")})
+    return {"env": [{"key": k} for k in keys], "limit": ENV_MAX_VARS}
+
+
+@app.put("/api/apps/{app_id}/env")
+async def put_env(app_id: int, body: EnvIn, request: Request):
+    row = owned_app(current_user(request), app_id)
+    key = check_env(body.key, body.value)
+    existing = {e["key"] for e in await coolify.envs(row["coolify_uuid"]) if not e.get("is_preview")}
+    if key not in existing and len(existing) >= ENV_MAX_VARS:
+        raise HTTPException(422, f"You can set up to {ENV_MAX_VARS} variables.")
+    await coolify.env_set(row["coolify_uuid"], key, body.value)
+    return {"ok": True, "restart_needed": True}
+
+
+@app.delete("/api/apps/{app_id}/env/{key}")
+async def delete_env(app_id: int, key: str, request: Request):
+    row = owned_app(current_user(request), app_id)
+    if not ENV_KEY_RE.match(key):
+        raise HTTPException(422, "Unknown variable.")
+    await coolify.env_delete(row["coolify_uuid"], key)
+    return {"ok": True, "restart_needed": True}
 
 
 @app.get("/api/apps/{app_id}/logs")

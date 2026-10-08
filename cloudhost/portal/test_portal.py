@@ -57,6 +57,16 @@ class FakeCoolify:
     async def logs(self, uuid, lines=200): return {"logs": "hello from the app"}
     async def delete(self, uuid): self.apps.pop(uuid, None)
 
+    # env vars: like Coolify, each variable is stored twice (normal + preview copy)
+    async def envs(self, uuid):
+        out = []
+        for k, v in self.apps[uuid].setdefault("env", {}).items():
+            out += [{"key": k, "value": v, "uuid": f"{k}-main", "is_preview": False},
+                    {"key": k, "value": v, "uuid": f"{k}-prev", "is_preview": True}]
+        return out
+    async def env_set(self, uuid, key, value): self.apps[uuid].setdefault("env", {})[key] = value
+    async def env_delete(self, uuid, key): self.apps[uuid].setdefault("env", {}).pop(key, None)
+
 
 @pytest.fixture()
 def env(monkeypatch):
@@ -251,3 +261,86 @@ def test_new_app_in_startup_gap_reads_as_building_not_stopped(env):
     with main.db() as conn:  # an old app that is genuinely stopped
         conn.execute("UPDATE apps SET created_at='2020-01-01T00:00:00+00:00'")
     assert cl.get(f"/api/apps/{app_id}").json()["state"] == "stopped"
+
+
+# ------------------------------------------------------------ environment variables
+def deployed(cl, c, **extra):
+    signup(cl)
+    r = cl.post("/api/apps", json={"name": "myapp", "image": "nginx:alpine", "port": 80, **extra})
+    assert r.status_code == 200, r.text
+    return r.json()["app"]["id"], "uuid1"
+
+
+def test_env_set_at_deploy_applied_before_start(env):
+    b, c = env
+    cl = client()
+    aid, uuid = deployed(cl, c, env={"DATABASE_URL": "postgresql://u:p@db/x", "MODE": "prod"})
+    assert c.apps[uuid]["env"] == {"DATABASE_URL": "postgresql://u:p@db/x", "MODE": "prod"}
+    assert (uuid, "start") in c.calls
+
+
+def test_env_values_are_write_only(env):
+    b, c = env
+    cl = client()
+    aid, uuid = deployed(cl, c)
+    r = cl.put(f"/api/apps/{aid}/env", json={"key": "SECRET_KEY", "value": "hunter2-very-secret"})
+    assert r.status_code == 200 and r.json()["restart_needed"] is True
+    listing = cl.get(f"/api/apps/{aid}/env")
+    assert listing.json()["env"] == [{"key": "SECRET_KEY"}]          # the preview twin is not listed twice
+    assert "hunter2" not in listing.text                              # and the value never comes back
+
+
+def test_env_replace_and_delete(env):
+    b, c = env
+    cl = client()
+    aid, uuid = deployed(cl, c)
+    cl.put(f"/api/apps/{aid}/env", json={"key": "A", "value": "1"})
+    cl.put(f"/api/apps/{aid}/env", json={"key": "A", "value": "2"})
+    assert c.apps[uuid]["env"] == {"A": "2"}
+    assert cl.delete(f"/api/apps/{aid}/env/A").status_code == 200
+    assert cl.get(f"/api/apps/{aid}/env").json()["env"] == []
+
+
+def test_env_name_and_size_rules(env):
+    b, c = env
+    cl = client()
+    aid, uuid = deployed(cl, c)
+    for bad in ("1ABC", "has space", "a-b", "", "COOLIFY_URL", "SERVICE_FQDN_X", "PATH", "LD_PRELOAD", "x" * 65):
+        r = cl.put(f"/api/apps/{aid}/env", json={"key": bad, "value": "v"})
+        assert r.status_code == 422, bad
+    assert cl.put(f"/api/apps/{aid}/env", json={"key": "BIG", "value": "x" * 5000}).status_code == 422
+    for bad_value in ("it's", "line1\nline2", "a\rb"):          # would corrupt the hosting engine's .env file
+        r = cl.put(f"/api/apps/{aid}/env", json={"key": "OK_KEY", "value": bad_value})
+        assert r.status_code == 422 and "single quote" in r.json()["detail"], bad_value
+    assert cl.put(f"/api/apps/{aid}/env", json={"key": "FINE", "value": 'pa$$word"dq"\\back#hash=eq'}).status_code == 200
+    assert c.apps[uuid].get("env", {}) == {"FINE": 'pa$$word"dq"\\back#hash=eq'}
+
+
+def test_env_variable_limit(env):
+    b, c = env
+    cl = client()
+    aid, uuid = deployed(cl, c)
+    for i in range(main.ENV_MAX_VARS):
+        assert cl.put(f"/api/apps/{aid}/env", json={"key": f"K{i}", "value": "v"}).status_code == 200
+    assert cl.put(f"/api/apps/{aid}/env", json={"key": "ONE_TOO_MANY", "value": "v"}).status_code == 422
+    assert cl.put(f"/api/apps/{aid}/env", json={"key": "K0", "value": "changed"}).status_code == 200   # replacing is still fine
+
+
+def test_bad_env_at_deploy_creates_nothing(env):
+    b, c = env
+    cl = client()
+    signup(cl)
+    r = cl.post("/api/apps", json={"name": "myapp", "image": "nginx:alpine", "env": {"bad key": "v"}})
+    assert r.status_code == 422 and len(c.apps) == 0
+
+
+def test_env_is_private_to_the_owner(env):
+    b, c = env
+    a, other = client(), client()
+    aid, uuid = deployed(a, c)
+    signup(other, email="b@example.com", name="Bob")
+    assert other.get(f"/api/apps/{aid}/env").status_code == 404
+    assert other.put(f"/api/apps/{aid}/env", json={"key": "A", "value": "1"}).status_code == 404
+    assert other.delete(f"/api/apps/{aid}/env/A").status_code == 404
+    assert c.apps[uuid].get("env", {}) == {}
+    assert client().get(f"/api/apps/{aid}/env").status_code == 401

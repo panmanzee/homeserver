@@ -267,3 +267,12 @@ dialog[open] { animation: pop .22s var(--ease); }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .chassis { transform: none !important; }
 }
+
+/* environment variables */
+textarea.input { padding: 12px 14px; min-height: 84px; resize: vertical; line-height: 1.45; }
+.mono-area { font-family: var(--mono, ui-monospace, monospace); font-size: 13px; }
+.envlist { display: grid; gap: 8px; margin: 18px 0 6px; }
+.envrow { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.envrow code { font-family: var(--mono, ui-monospace, monospace); font-size: 13px; flex: 1; overflow-wrap: anywhere; }
+.envform .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 520px) { .envform .input-row { grid-template-columns: 1fr; } }
