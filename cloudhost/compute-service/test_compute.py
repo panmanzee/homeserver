@@ -51,6 +51,18 @@ class FakePVE:
         self.vms[vmid]["status"] = {"start": "running", "stop": "stopped", "shutdown": "stopped", "reboot": "running"}[name]
         return f"UPID:{name}"
 
+    async def snapshots(self, vmid):
+        return [{"name": n, "snaptime": 1} for n in self.vms[vmid].setdefault("snaps", [])] + [{"name": "current"}]
+
+    async def snapshot(self, vmid, name):
+        self.vms[vmid].setdefault("snaps", []).append(name); self.log.append(("snapshot", vmid, name)); return "UPID:snap"
+
+    async def rollback(self, vmid, name):
+        self.log.append(("rollback", vmid, name)); self.vms[vmid]["status"] = "stopped"; return "UPID:rb"
+
+    async def delete_snapshot(self, vmid, name):
+        self.vms[vmid]["snaps"].remove(name); return "UPID:ds"
+
     async def delete(self, vmid):
         self.vms.pop(vmid)
         self.log.append(("delete", vmid))
@@ -308,3 +320,61 @@ def test_restart_cleans_up_half_built_machines(env):
     assert (main.VMID_BASE + 99) not in f.vms
     with main.db() as c:
         assert c.execute("SELECT state FROM machines WHERE id=99").fetchone()["state"] == "error"
+
+
+def snap_url(m, tail=""):
+    return f"/machines/{m['id']}/snapshots{tail}"
+
+
+def test_snapshots_are_a_paid_feature_with_a_limit(env):
+    cl, f, b = env
+    b.tiers["t1"] = "hobby"
+    m = make(cl).json()
+    wait_state(cl, m["id"], "t1", "running")
+    q = {"tenant": "t1"}
+    assert cl.get(snap_url(m), params=q).json() == {"snapshots": [], "limit": 1}
+    assert cl.post(snap_url(m), params=q, json={"name": "Bad Name"}).status_code == 422
+    r = cl.post(snap_url(m), params=q, json={"name": "before-upgrade"})
+    assert r.status_code == 200 and r.json()["snapshots"][0]["name"] == "before-upgrade"
+    assert cl.post(snap_url(m), params=q, json={"name": "before-upgrade"}).status_code == 409
+    r = cl.post(snap_url(m), params=q, json={"name": "second"})
+    assert r.status_code == 402 and "Delete one first" in r.json()["detail"]
+
+
+def test_free_plan_cannot_snapshot(env):
+    cl, f, b = env
+    b.tiers["t1"] = "hobby"
+    m = make(cl).json()
+    wait_state(cl, m["id"], "t1", "running")
+    b.tiers["t1"] = "free"
+    assert cl.post(snap_url(m), params={"tenant": "t1"}, json={"name": "x"}).status_code == 402
+
+
+def test_restore_stops_rolls_back_and_starts(env):
+    cl, f, b = env
+    b.tiers["t1"] = "hobby"
+    m = make(cl).json()
+    wait_state(cl, m["id"], "t1", "running")
+    q = {"tenant": "t1"}
+    cl.post(snap_url(m), params=q, json={"name": "good"})
+    assert cl.post(snap_url(m, "/nope/restore"), params=q).status_code == 404
+    assert cl.post(snap_url(m, "/good/restore"), params=q).status_code == 200
+    vmid = main.VMID_BASE + m["id"]
+    names = [x[0] for x in f.log if x[1:2] == (vmid,)]
+    assert names.index("stop") < names.index("rollback") < len(names) - 1 and names[-1] == "start"
+    assert f.vms[vmid]["status"] == "running"
+
+
+def test_delete_snapshot_and_isolation(env):
+    cl, f, b = env
+    b.tiers["t1"] = b.tiers["t2"] = "hobby"
+    m = make(cl).json()
+    wait_state(cl, m["id"], "t1", "running")
+    cl.post(snap_url(m), params={"tenant": "t1"}, json={"name": "keep"})
+    other = {"tenant": "t2"}
+    assert cl.get(snap_url(m), params=other).status_code == 404
+    assert cl.post(snap_url(m), params=other, json={"name": "x"}).status_code == 404
+    assert cl.post(snap_url(m, "/keep/restore"), params=other).status_code == 404
+    assert cl.delete(snap_url(m, "/keep"), params=other).status_code == 404
+    r = cl.delete(snap_url(m, "/keep"), params={"tenant": "t1"})
+    assert r.status_code == 200 and r.json()["snapshots"] == []

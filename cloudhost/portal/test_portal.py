@@ -111,6 +111,10 @@ class FakeCompute:
     async def action(self, mid, t, a): self._own(mid, t); self.calls.append((a, mid)); return {"ok": True}
     async def delete(self, mid, t): self._own(mid, t); del self.machines[mid]; return {"ok": True}
     async def public(self, mid, t, enabled, port): self._own(mid, t); self.calls.append(("public", mid, enabled, port)); return {"ok": True}
+    async def snaps(self, mid, t): self._own(mid, t); return {"snapshots": [], "limit": 1}
+    async def snap_create(self, mid, t, name): self._own(mid, t); self.calls.append(("snap", mid, name)); return {"snapshots": [{"name": name}], "limit": 1}
+    async def snap_restore(self, mid, t, name): self._own(mid, t); self.calls.append(("restore", mid, name)); return {"ok": True}
+    async def snap_delete(self, mid, t, name): self._own(mid, t); return {"snapshots": []}
     async def open_terminal(self, mid, t): self._own(mid, t); self.sock = FakeSocket(); return self.sock
 
 
@@ -487,3 +491,21 @@ def test_terminal_refuses_cross_site_origin(env):
     with pytest.raises(WebSocketDisconnect):
         with cl.websocket_connect(f"/api/machines/{mid}/terminal", headers={"origin": "https://evil.example"}) as ws:
             ws.receive_bytes()
+
+
+def test_snapshot_routes_proxy_and_isolate(env):
+    a, other = client(), client()
+    signup(a)
+    mid = a.post("/api/machines", json={"name": "web1", "size": "nano"}).json()["machine"]["id"]
+    assert a.post(f"/api/machines/{mid}/snapshots", json={"name": "s1"}).json()["snapshots"][0]["name"] == "s1"
+    assert a.post(f"/api/machines/{mid}/snapshots/s1/restore").status_code == 200
+    signup(other, email="b@example.com", name="Bob")
+    assert other.get(f"/api/machines/{mid}/snapshots").status_code == 404
+    assert other.post(f"/api/machines/{mid}/snapshots", json={"name": "x"}).status_code == 404
+    assert other.post(f"/api/machines/{mid}/snapshots/s1/restore").status_code == 404
+    assert other.delete(f"/api/machines/{mid}/snapshots/s1").status_code == 404
+
+
+def test_plans_report_machine_allowance(env):
+    d = client().get("/api/plans").json()["plans"]
+    assert all("machines" in p for p in d)

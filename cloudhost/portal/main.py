@@ -239,6 +239,10 @@ class Compute:
     async def create(self, t, **body): return await self._req("POST", "/machines", json={"tenant": t, **body})
     async def action(self, mid, t, a): return await self._req("POST", f"/machines/{mid}/{a}", params={"tenant": t})
     async def delete(self, mid, t): return await self._req("DELETE", f"/machines/{mid}", params={"tenant": t})
+    async def snaps(self, mid, t): return await self._req("GET", f"/machines/{mid}/snapshots", params={"tenant": t})
+    async def snap_create(self, mid, t, name): return await self._req("POST", f"/machines/{mid}/snapshots", params={"tenant": t}, json={"name": name})
+    async def snap_restore(self, mid, t, name): return await self._req("POST", f"/machines/{mid}/snapshots/{name}/restore", params={"tenant": t})
+    async def snap_delete(self, mid, t, name): return await self._req("DELETE", f"/machines/{mid}/snapshots/{name}", params={"tenant": t})
     async def public(self, mid, t, enabled, port):
         return await self._req("PUT", f"/machines/{mid}/public", params={"tenant": t}, json={"enabled": enabled, "port": port})
 
@@ -451,9 +455,13 @@ async def plans():
     free_cpu = max(0.0, total["total_cpu_cores"] - cap["committed_cpu_cores"])
     slots_total = int(total["total_cpu_cores"] / smallest + 1e-9)
     slots_free = int(free_cpu / smallest + 1e-9)
+    try:
+        mrules = (await compute.catalog())["tiers"]
+    except HTTPException:
+        mrules = {}
     out = []
     for key, t in tiers.items():
-        out.append({"id": key, "name": t["name"], "price": t["price_usd_monthly"], "max_apps": t["max_apps"],
+        out.append({"machines": mrules.get(key, {}).get("max_machines", 0), "machine_sizes": mrules.get(key, {}).get("sizes", []), "id": key, "name": t["name"], "price": t["price_usd_monthly"], "max_apps": t["max_apps"],
                     "cpu": t["cpu_limit"], "memory_mb": t["memory_limit_mb"], "custom_domain": t["custom_domain"],
                     "sleeps": t["sleep_after_inactive_min"], "aws": AWS_COMPARE.get(key)})
     return {"plans": out, "rack": {"slots_total": slots_total, "slots_free": slots_free, "apps": cap["apps"]},
@@ -728,14 +736,38 @@ async def get_machine(mid: int, request: Request):
     return await compute.get(mid, tenant(current_user(request)))
 
 
-@app.post("/api/machines/{mid}/{action}")
-async def machine_action(mid: int, action: str, request: Request):
-    return await compute.action(mid, tenant(current_user(request)), action)
-
-
 @app.delete("/api/machines/{mid}")
 async def delete_machine(mid: int, request: Request):
     return await compute.delete(mid, tenant(current_user(request)))
+
+
+class SnapIn(BaseModel):
+    name: str
+
+
+@app.get("/api/machines/{mid}/snapshots")
+async def get_snaps(mid: int, request: Request):
+    return await compute.snaps(mid, tenant(current_user(request)))
+
+
+@app.post("/api/machines/{mid}/snapshots")
+async def make_snap(mid: int, body: SnapIn, request: Request):
+    return await compute.snap_create(mid, tenant(current_user(request)), body.name)
+
+
+@app.post("/api/machines/{mid}/snapshots/{name}/restore")
+async def restore_snap(mid: int, name: str, request: Request):
+    return await compute.snap_restore(mid, tenant(current_user(request)), name)
+
+
+@app.delete("/api/machines/{mid}/snapshots/{name}")
+async def delete_snap(mid: int, name: str, request: Request):
+    return await compute.snap_delete(mid, tenant(current_user(request)), name)
+
+
+@app.post("/api/machines/{mid}/{action}")
+async def machine_action(mid: int, action: str, request: Request):
+    return await compute.action(mid, tenant(current_user(request)), action)
 
 
 @app.put("/api/machines/{mid}/public")

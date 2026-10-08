@@ -148,6 +148,7 @@ function planCard(p, opts = {}) {
     h('div', { class: 'price' }, money(p.price), h('small', {}, p.price ? ' / month' : ' forever')),
     h('ul', {},
       h('li', {}, plural(p.max_apps, 'app')),
+      p.machines ? h('li', {}, `${plural(p.machines, 'virtual machine')} (${p.machine_sizes.join(' or ')})`) : h('li', { class: 'muted' }, 'No virtual machines'),
       h('li', {}, `${p.cpu} CPU and ${p.memory_mb} MB RAM per app`),
       h('li', {}, 'Your own https:// address'),
       h('li', {}, 'Images from Docker Hub, ghcr.io, quay.io')),
@@ -524,6 +525,7 @@ function machineUnit(m) {
         m.state === 'running' ? h('button', { class: 'btn ghost sm', onclick: () => machineAct(m, 'stop') }, icon('stop'), 'Stop') : null,
         m.state === 'stopped' ? h('button', { class: 'btn ghost sm', onclick: () => machineAct(m, 'start') }, icon('play'), 'Start') : null,
         (m.state === 'running' || m.state === 'stopped') ? h('button', { class: 'btn ghost sm', onclick: () => openPublic(m) }, icon('ext'), 'Web address') : null,
+        (m.state === 'running' || m.state === 'stopped') ? h('button', { class: 'btn ghost sm', onclick: () => openSnapshots(m) }, icon('copy'), 'Snapshots') : null,
         h('button', { class: 'btn quiet sm', disabled: m.state === 'deleting', onclick: () => removeMachine(m), 'aria-label': `Delete ${m.name}` }, icon('trash'))),
       m.state === 'error' ? h('div', { class: 'errtail' }, m.error || 'This machine could not be created. Delete it and try again.') : null,
       h('div', { class: 'muted', style: 'font-size:13px;margin-top:10px' }, `${m.image_label} · ${sizeText(m.specs)} · private address ${m.ip}${busy ? '' : ' · login: ' + m.user}`)));
@@ -601,6 +603,39 @@ async function openTerminal(m) {
   term.onData((data) => { if (ws.readyState === 1) ws.send(enc.encode(data)); });
   const ro = new ResizeObserver(sendSize); ro.observe(box);
   d.addEventListener('close', () => { ro.disconnect(); ws.close(); term.dispose(); });
+}
+
+async function openSnapshots(m) {
+  const list = h('div', { class: 'envlist' }, h('p', { class: 'muted' }, 'Loading…'));
+  const name = h('input', { class: 'input', id: 'sn', placeholder: 'before-upgrade', maxlength: '31', autocomplete: 'off', spellcheck: 'false' });
+  const err = h('div', { class: 'formerr', role: 'alert', hidden: true });
+  const save = h('button', { class: 'btn', type: 'submit' }, 'Take snapshot');
+  let limit = 0;
+  const draw = (snaps) => list.replaceChildren(...(snaps.length ? snaps.map((x) => h('div', { class: 'envrow' }, h('code', {}, x.name),
+    h('span', { class: 'muted' }, x.created ? new Date(x.created * 1000).toLocaleString() : ''),
+    h('button', { class: 'btn ghost sm', type: 'button', onclick: () => restore(x.name) }, icon('redo'), 'Restore'),
+    h('button', { class: 'btn quiet sm', type: 'button', 'aria-label': `Delete ${x.name}`, onclick: async () => {
+      try { draw((await api(`/machines/${m.id}/snapshots/${x.name}`, { method: 'DELETE' })).snapshots); } catch (ex) { toast(ex.message, true); } } }, icon('trash'))))
+    : [h('p', { class: 'muted' }, limit ? 'No snapshots yet.' : 'Snapshots are part of the Hobby and Pro plans.')]));
+  const restore = async (n) => {
+    if (!await confirmDialog({ title: `Restore ${n}?`, body: 'The machine goes back to how it was then. Anything changed since is lost, and it restarts.', confirm: 'Restore', danger: true })) return;
+    try { await api(`/machines/${m.id}/snapshots/${n}/restore`, { method: 'POST' }); toast('Restored. The machine is restarting.'); d.close(); await loadMachines(); drawMachines(); }
+    catch (ex) { toast(ex.message, true); }
+  };
+  const form = h('form', { novalidate: true }, h('div', { class: 'field' }, h('label', { for: 'sn' }, 'Save the machine as it is now'), h('div', { class: 'input-row' }, name, save)), err);
+  const d = dialog(h('div', {}, h('h2', {}, `Snapshots of ${m.name}`),
+    h('p', { class: 'muted' }, 'A snapshot is a restore point for the whole disk. Take one before you change something risky.'), list, form,
+    h('div', { class: 'actions' }, h('button', { class: 'btn ghost', type: 'button', onclick: () => d.close() }, 'Close'))));
+  const load = async () => { try { const r = await api(`/machines/${m.id}/snapshots`); limit = r.limit; draw(r.snapshots); } catch (ex) { list.replaceChildren(h('p', { class: 'muted' }, ex.message)); } };
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault(); err.hidden = true;
+    if (!name.value.trim()) { name.focus(); return; }
+    save.disabled = true;
+    try { const r = await api(`/machines/${m.id}/snapshots`, { method: 'POST', body: { name: name.value } }); name.value = ''; limit = r.limit; draw(r.snapshots); toast('Snapshot saved'); }
+    catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    save.disabled = false;
+  });
+  load();
 }
 
 function openPublic(m) {

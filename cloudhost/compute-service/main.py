@@ -306,6 +306,89 @@ async def provision(mid: int, ssh_keys: str):
         set_state(mid, "error", "The machine could not be created. Delete it and try again.")
 
 
+SNAP_RE = re.compile(r"^[a-z][a-z0-9-]{0,30}$")
+SNAP_LIMIT = {"free": 0, "hobby": 1, "pro": 2}
+
+
+class SnapIn(BaseModel):
+    name: str
+
+
+async def snap_rows(vmid: int) -> list[dict]:
+    rows = await pve.snapshots(vmid)
+    return [{"name": r["name"], "created": r.get("snaptime")} for r in rows if r.get("name") != "current"]
+
+
+@app.get("/machines/{mid}/snapshots")
+async def list_snapshots(mid: int, tenant: str, x_service_key: str | None = Header(None)):
+    guard(x_service_key)
+    r = get_row(mid, tenant)
+    tier = await billing.tier(tenant)
+    try:
+        snaps = await snap_rows(r["vmid"]) if r["state"] in ("running", "stopped") else []
+    except PVEError:
+        snaps = []
+    return {"snapshots": snaps, "limit": SNAP_LIMIT.get(tier, 0)}
+
+
+@app.post("/machines/{mid}/snapshots")
+async def create_snapshot(mid: int, body: SnapIn, tenant: str, x_service_key: str | None = Header(None)):
+    guard(x_service_key)
+    r = get_row(mid, tenant)
+    name = body.name.strip().lower()
+    if not SNAP_RE.match(name):
+        raise HTTPException(422, "Use lowercase letters, numbers and hyphens, starting with a letter.")
+    if r["state"] not in ("running", "stopped"):
+        raise HTTPException(409, "The machine is not ready.")
+    tier = await billing.tier(tenant)
+    limit = SNAP_LIMIT.get(tier, 0)
+    if limit == 0:
+        raise HTTPException(402, f"Snapshots are not part of the {tier.title()} plan. Upgrade to use them.")
+    try:
+        have = await snap_rows(r["vmid"])
+        if any(x["name"] == name for x in have):
+            raise HTTPException(409, "You already have a snapshot with that name.")
+        if len(have) >= limit:
+            raise HTTPException(402, f"Your {tier.title()} plan keeps {limit} snapshot{'s' if limit != 1 else ''}. Delete one first.")
+        await pve.wait(await pve.snapshot(r["vmid"], name), 120)
+    except PVEError as exc:
+        log.warning("snapshot %s failed: %s", r["name"], exc)
+        raise HTTPException(502, "The virtualization host could not take the snapshot. Try again.")
+    return {"snapshots": await snap_rows(r["vmid"]), "limit": limit}
+
+
+@app.post("/machines/{mid}/snapshots/{snap}/restore")
+async def restore_snapshot(mid: int, snap: str, tenant: str, x_service_key: str | None = Header(None)):
+    guard(x_service_key)
+    r = get_row(mid, tenant)
+    if r["state"] not in ("running", "stopped") or not SNAP_RE.match(snap):
+        raise HTTPException(409, "The machine is not ready.")
+    try:
+        if not any(x["name"] == snap for x in await snap_rows(r["vmid"])):
+            raise HTTPException(404, "Snapshot not found.")
+        if await pve.status(r["vmid"]) == "running":
+            await pve.wait(await pve.action(r["vmid"], "stop"), 90)
+        await pve.wait(await pve.rollback(r["vmid"], snap), 180)
+        await pve.wait(await pve.action(r["vmid"], "start"), 60)
+    except PVEError as exc:
+        log.warning("restore %s failed: %s", r["name"], exc)
+        raise HTTPException(502, "The restore failed. The machine was not changed if it is still running; try again.")
+    return {"ok": True}
+
+
+@app.delete("/machines/{mid}/snapshots/{snap}")
+async def delete_snapshot(mid: int, snap: str, tenant: str, x_service_key: str | None = Header(None)):
+    guard(x_service_key)
+    r = get_row(mid, tenant)
+    if not SNAP_RE.match(snap):
+        raise HTTPException(404, "Snapshot not found.")
+    try:
+        await pve.wait(await pve.delete_snapshot(r["vmid"], snap), 120)
+    except PVEError:
+        raise HTTPException(502, "Could not delete the snapshot. Try again.")
+    return {"snapshots": await snap_rows(r["vmid"])}
+
+
 @app.post("/machines/{mid}/{action}")
 async def machine_action(mid: int, action: str, tenant: str, x_service_key: str | None = Header(None)):
     guard(x_service_key)

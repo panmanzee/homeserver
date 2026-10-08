@@ -78,3 +78,15 @@ class PVE:
 
     async def delete(self, vmid: int) -> str:
         return await self._req("DELETE", f"{self._q(vmid)}?purge=1&destroy-unreferenced-disks=1")
+
+    async def snapshots(self, vmid: int) -> list[dict]:
+        return await self._req("GET", f"{self._q(vmid)}/snapshot")
+
+    async def snapshot(self, vmid: int, name: str) -> str:
+        return await self._req("POST", f"{self._q(vmid)}/snapshot", {"snapname": name})
+
+    async def rollback(self, vmid: int, name: str) -> str:
+        return await self._req("POST", f"{self._q(vmid)}/snapshot/{name}/rollback")
+
+    async def delete_snapshot(self, vmid: int, name: str) -> str:
+        return await self._req("DELETE", f"{self._q(vmid)}/snapshot/{name}")

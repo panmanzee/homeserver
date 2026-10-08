@@ -18,7 +18,7 @@ qm template $TEMPLATE
 # 2. a least-privilege API identity for the compute service
 pveum pool add customers --comment "customer virtual machines"
 pveum role add CloudhostVM --privs "VM.Allocate VM.Clone VM.Audit VM.PowerMgmt VM.Console VM.Config.CPU VM.Config.Memory \
-VM.Config.Disk VM.Config.Network VM.Config.Cloudinit VM.Config.Options VM.Config.HWType VM.Config.CDROM \
+VM.Config.Disk VM.Config.Network VM.Config.Cloudinit VM.Config.Options VM.Config.HWType VM.Config.CDROM VM.Snapshot VM.Snapshot.Rollback \
 Datastore.AllocateSpace Datastore.Audit SDN.Use Pool.Audit"
 pveum user add cloudhost@pve --comment "cloudhost compute service"
 pveum user token add cloudhost@pve compute --privsep 1 --output-format json > /root/.pve_compute_token.json
