@@ -102,9 +102,11 @@ def summarize(rec):
     return m
 
 
-def random_entry(rec, fee, n_sims=1000):
+def random_entry(rec, fee, n_sims=1000, tf="1d"):
     """Random entries: same number of trades, same holding times, same stake fraction,
-    same fee. Pair and entry day random. Score = sum(stake_frac * net trade return)."""
+    same fee. Pair and entry bar random (bars of the strategy timeframe).
+    Score = sum(stake_frac * net trade return)."""
+    bar_min = {"1d": 1440, "4h": 240}[tf]
     s, e = tr_dates(rec["timerange"])
     eq, _, _ = strat_equity(rec)
     fr, hold, score_strat = [], [], 0.0
@@ -114,11 +116,19 @@ def random_entry(rec, fee, n_sims=1000):
         equity_then = float(eq.asof(od - pd.Timedelta(days=1))) if od - pd.Timedelta(days=1) >= eq.index[0] else START_BAL
         f = t["stake_amount"] / equity_then
         fr.append(f)
-        hold.append(max(1, int(round(t["trade_duration"] / 1440))))
+        hold.append(max(1, int(round(t["trade_duration"] / bar_min))))
         score_strat += f * t["profit_ratio"]
     fr, hold = np.array(fr), np.array(hold)
-    opens = {p: PX[p].loc[s:e - pd.Timedelta(days=1), "open"].values for p in PX}
-    n = len(opens["BTC/USDT"])
+    if tf == "1d":
+        opens = {p: PX[p].loc[s:e - pd.Timedelta(days=1), "open"].values for p in PX}
+    else:
+        opens = {}
+        for p in PX:
+            d = pd.read_feather(f"{DATA}/{p.replace('/', '_')}-{tf}.feather")
+            d["date"] = pd.to_datetime(d["date"], utc=True)
+            d = d.set_index("date")
+            opens[p] = d.loc[(d.index >= s) & (d.index < e), "open"].values
+    n = min(len(v) for v in opens.values())
     pairs = list(PX)
     scores = np.empty(n_sims)
     for k in range(n_sims):
@@ -292,13 +302,28 @@ def main():
         if not rec:
             continue
         m = summarize(rec)
-        m["random"] = random_entry(rec, 0.0025)
+        m["random"] = random_entry(rec, 0.0025, tf="4h" if lab == "tf_4h" else "1d")
         m["mc_dd"] = mc_drawdown(rec)
         m["years"] = {k[1]: runs[k]["profit_total"] for k in runs
                       if k[0] == lab and k[2] == 0.0025 and k[1] != FULL}
         var[lab] = m
     if var:
         out["sizing"] = var
+    # --- 4h candidate at all fees, random test on 4h bars (vs daily-bar approximation)
+    r4 = {}
+    for fee in (0.001, 0.0025, 0.003):
+        rec = runs.get(("tf_4h", FULL, fee))
+        if rec:
+            m = summarize(rec)
+            m["random_4hbars"] = random_entry(rec, fee, tf="4h")
+            m["random_dailybars"] = random_entry(rec, fee, tf="1d")
+            r4[str(fee)] = m
+    out["tf_4h_full"] = r4
+    rec = runs.get(("tf_4h", "20200101-20261021", 0.0025))
+    if rec:
+        m = summarize(rec)
+        m["random_4hbars"] = random_entry(rec, 0.0025, tf="4h")
+        out["tf_4h_2020plus"] = m
     # --- gap-fill stress on stop exits (default daily + 4h), fee 0.25% and 0.3%
     gs = {}
     for lab, tf in (("default", "1d"), ("tf_4h", "4h")):
