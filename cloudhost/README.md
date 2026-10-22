@@ -1,5 +1,7 @@
 # cloudhost (pandeploy.dev)
 
+Public copy: https://github.com/panmanzee/pandeploy
+
 A small multi-tenant PaaS on one home server: Coolify deploys apps, Traefik routes them,
 a Cloudflare Tunnel exposes them (no open ports at home), and a FastAPI service enforces
 subscription quotas against Coolify. Runs in Proxmox LXC 102 ("cloudhost"). Early access:
