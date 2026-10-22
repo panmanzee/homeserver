@@ -1,0 +1,22 @@
+services:
+  jev-decision-server:
+    build: .
+    container_name: jev-decision-server
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - .env
+    networks:
+      - default
+      - n8n-stack_default
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  n8n-stack_default:
+    external: true
