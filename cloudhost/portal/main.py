@@ -23,7 +23,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import WebSocket, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -138,6 +138,11 @@ _fails: dict[str, list[float]] = {}
 def _throttle_key(request: Request, email: str) -> str:
     ip = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "?")
     return f"{ip}|{email.lower()}"
+
+
+def _invite_key(request: Request) -> str:
+    """Per-IP key for wrong invite codes, so the code cannot be guessed by rotating email addresses."""
+    return _throttle_key(request, "#invite")
 
 
 def throttled(key: str) -> bool:
@@ -312,6 +317,10 @@ app = FastAPI(title="pandeploy portal", docs_url=None, redoc_url=None, openapi_u
 
 @app.middleware("http")
 async def security(request: Request, call_next):
+    # Cloudflare reports the visitor's scheme in cf-visitor. Send plain-HTTP visitors to HTTPS so a sign-in
+    # form is never served (and a password never posted) over an unencrypted connection.
+    if COOKIE_SECURE and '"scheme":"http"' in request.headers.get("cf-visitor", "").replace(" ", ""):
+        return RedirectResponse(str(request.url.replace(scheme="https", port=None)), status_code=308)
     # CSRF: mutating API calls must come from our own origin.
     if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path.startswith("/api/"):
         origin = request.headers.get("origin")
@@ -328,6 +337,8 @@ async def security(request: Request, call_next):
     resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     resp.headers["Content-Security-Policy"] = ("default-src 'self'; style-src 'self' 'unsafe-inline'; "
                                                "img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+    if COOKIE_SECURE:
+        resp.headers["Strict-Transport-Security"] = "max-age=31536000"
     if request.url.path.startswith("/api/"):
         resp.headers["Cache-Control"] = "no-store"
     return resp
@@ -392,7 +403,7 @@ def public_user(u):
     return {"id": u["id"], "name": u["name"], "email": u["email"]}
 
 
-@app.get("/healthz")
+@app.api_route("/healthz", methods=["GET", "HEAD"])
 def healthz():
     return {"status": "ok"}
 
@@ -407,7 +418,10 @@ def signup(body: SignupIn, request: Request, response: Response):
         raise HTTPException(422, "Enter a valid email address.")
     if not 10 <= len(body.password) <= 200:
         raise HTTPException(422, "Use a password with at least 10 characters.")
+    if INVITE_CODE and throttled(_invite_key(request)):
+        raise HTTPException(429, "Too many attempts. Wait 15 minutes and try again.")
     if INVITE_CODE and not hmac.compare_digest(body.invite.strip(), INVITE_CODE):
+        _fails.setdefault(_invite_key(request), []).append(time.time())
         raise HTTPException(403, "That invite code isn't valid.")
     with db() as c:
         if c.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
@@ -447,12 +461,13 @@ def reset_password(body: ResetIn, request: Request, response: Response):
     """No email service: the invite code (known only to people you invited) proves it is a legitimate reset."""
     email = body.email.strip().lower()
     key = _throttle_key(request, "reset:" + email)
-    if throttled(key):
+    if throttled(key) or throttled(_invite_key(request)):
         raise HTTPException(429, "Too many attempts. Wait 15 minutes and try again.")
     if not 10 <= len(body.password) <= 200:
         raise HTTPException(422, "Use a password with at least 10 characters.")
     if not INVITE_CODE or not hmac.compare_digest(body.invite.strip(), INVITE_CODE):
         _fails.setdefault(key, []).append(time.time())
+        _fails.setdefault(_invite_key(request), []).append(time.time())
         raise HTTPException(403, "That invite code isn't valid.")
     with db() as c:
         u = c.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
@@ -934,7 +949,7 @@ async def machine_terminal(ws: WebSocket, mid: int):
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-@app.get("/{path:path}")
+@app.api_route("/{path:path}", methods=["GET", "HEAD"])          # HEAD for uptime monitors and link checks
 def spa(path: str):
     if path.startswith("api/"):
         raise HTTPException(404, "Not found.")

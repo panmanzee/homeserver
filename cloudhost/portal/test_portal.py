@@ -587,3 +587,31 @@ def test_disks_are_private_to_the_owner(env):
     assert other.put(f"/api/apps/{aid}/storage", json={"mount_path": "/x"}).status_code == 404
     assert other.delete(f"/api/apps/{aid}/storage", params={"path": "/data"}).status_code == 404
     assert len(c.apps[uuid]["vols"]) == 1
+
+
+# ---------------------------------------------------------------- audit fixes (2026-10-22)
+def test_invite_guessing_throttled_across_emails(env, monkeypatch):
+    monkeypatch.setattr(main, "INVITE_CODE", "letmein")
+    cl = client()
+    for i in range(5):     # a different email each time must not reset the counter
+        r = cl.post("/api/signup", json={"name": "A", "email": f"x{i}@example.com", "password": "correct horse battery", "invite": "guess"})
+        assert r.status_code == 403
+    r = cl.post("/api/signup", json={"name": "A", "email": "y@example.com", "password": "correct horse battery", "invite": "letmein"})
+    assert r.status_code == 429
+    r = cl.post("/api/reset", json={"email": "z@example.com", "invite": "letmein", "password": "a brand new password"})
+    assert r.status_code == 429
+
+
+def test_plain_http_visitors_redirected_and_hsts(env, monkeypatch):
+    monkeypatch.setattr(main, "COOKIE_SECURE", True)
+    cl = TestClient(main.app, base_url="http://app.pandeploy.dev")
+    r = cl.get("/apps?x=1", headers={"cf-visitor": '{"scheme":"http"}'}, follow_redirects=False)
+    assert r.status_code == 308 and r.headers["location"] == "https://app.pandeploy.dev/apps?x=1"
+    r = cl.get("/", headers={"cf-visitor": '{"scheme":"https"}'})
+    assert r.status_code == 200 and r.headers["strict-transport-security"].startswith("max-age=")
+
+
+def test_head_requests_supported(env):
+    cl = client()
+    assert cl.head("/").status_code == 200
+    assert cl.head("/healthz").status_code == 200
