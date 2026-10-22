@@ -151,6 +151,37 @@ def mc_drawdown(rec, n_sims=2000):
             "p95": float(np.percentile(sims, 95)), "worst": float(sims.max()), "n_trades": len(pnl)}
 
 
+def gap_stress(rec, tf="1d"):
+    """Stop fills: freqtrade fills a stop at the stop price if the candle HIGH is above it, even when
+    the candle OPENED below the stop (gap down). A real market stop would fill near the open.
+    Re-price those exits at the candle open (idea from backtrader gap handling)."""
+    fee = float(rec.get("fee", 0.0))
+    px = {}
+    for p in PX:
+        if tf == "1d":
+            px[p] = PX[p]
+        else:
+            d = pd.read_feather(f"{DATA}/{p.replace('/', '_')}-{tf}.feather")
+            d["date"] = pd.to_datetime(d["date"], utc=True)
+            px[p] = d.set_index("date")
+    n_stop, n_gap, delta = 0, 0, 0.0
+    for t in rec["trades"]:
+        if "stop" not in str(t.get("exit_reason", "")):
+            continue
+        n_stop += 1
+        cd = pd.Timestamp(t["close_date"])
+        cd = cd if cd.tzinfo else cd.tz_localize("UTC")
+        if cd not in px[t["pair"]].index:
+            continue
+        o = float(px[t["pair"]].loc[cd, "open"])
+        if o < t["close_rate"]:
+            n_gap += 1
+            delta += t["amount"] * (o - t["close_rate"]) * (1 - fee)
+    base = rec["profit_total_abs"]
+    return {"stop_exits": n_stop, "gap_exits": n_gap, "delta_usdt": delta,
+            "profit_pct_freqtrade": base / START_BAL, "profit_pct_gapfill": (base + delta) / START_BAL}
+
+
 def main():
     runs = {}
     for fn in glob.glob(f"{D}/*.jsonl"):
@@ -268,6 +299,14 @@ def main():
         var[lab] = m
     if var:
         out["sizing"] = var
+    # --- gap-fill stress on stop exits (default daily + 4h), fee 0.25% and 0.3%
+    gs = {}
+    for lab, tf in (("default", "1d"), ("tf_4h", "4h")):
+        for fee in (0.0025, 0.003):
+            rec = runs.get((lab, FULL, fee))
+            if rec:
+                gs[f"{lab}@{fee}"] = gap_stress(rec, tf)
+    out["gap_stress"] = gs
     json.dump(out, open(f"{D}/summary.json", "w"), indent=1, default=str)
     print(json.dumps(out, indent=1, default=str)[:20000])
 
