@@ -1,0 +1,96 @@
+"""
+weekly_report.py - paper-trading weekly report (markdown to stdout).
+Run on the Proxmox host (cron) via:
+  pct exec 101 -- docker exec freqtrade python /freqtrade/user_data/scripts/weekly_report.py
+Reads both dry-run sqlite DBs (A = TrendSimple, B = TrendSimpleJev), live prices from Binance
+public ticker (no key), and compares with BTC buy-and-hold since the paper start.
+Read-only: never writes to the bot DBs.
+"""
+import json
+import sqlite3
+import urllib.request
+from datetime import datetime, timezone
+
+UD = "/freqtrade/user_data"
+START_BAL = 3000.0
+PAPER_START = "2026-10-22"          # bots started 2026-10-22 16:48 UTC
+BTC_AT_START = None                 # filled from Binance daily kline of PAPER_START
+BOTS = {"A TrendSimple (no Jev)": f"{UD}/tradesv3.dryrun.sqlite",
+        "B TrendSimpleJev": f"{UD}/tradesv3.dryrun-jev.sqlite"}
+
+
+def get_json(url):
+    with urllib.request.urlopen(url, timeout=15) as r:
+        return json.load(r)
+
+
+def price(pair):
+    try:
+        return float(get_json(f"https://api.binance.com/api/v3/ticker/price?symbol={pair.replace('/', '')}")["price"])
+    except Exception:
+        return None
+
+
+def btc_open_on(day):
+    try:
+        ts = int(datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp() * 1000)
+        k = get_json(f"https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&startTime={ts}&limit=1")
+        return float(k[0][1])
+    except Exception:
+        return None
+
+
+def bot_stats(db):
+    c = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    c.row_factory = sqlite3.Row
+    rows = [dict(r) for r in c.execute("select * from trades order by open_date")]
+    c.close()
+    closed = [r for r in rows if not r["is_open"]]
+    opened = [r for r in rows if r["is_open"]]
+    realized = sum(r["close_profit_abs"] or 0 for r in closed)
+    unreal = 0.0
+    for r in opened:
+        p = price(r["pair"])
+        if p:
+            unreal += r["amount"] * p * (1 - (r["fee_close"] or 0.001)) - r["open_trade_value"]
+    eq = START_BAL + realized + unreal
+    wins = sum(1 for r in closed if (r["close_profit_abs"] or 0) > 0)
+    return {"trades_closed": len(closed), "trades_open": len(opened), "wins": wins,
+            "realized": realized, "unrealized": unreal, "equity": eq,
+            "return_pct": (eq / START_BAL - 1) * 100, "rows": rows}
+
+
+def main():
+    now = datetime.now(timezone.utc)
+    btc_now, btc_start = price("BTC/USDT"), btc_open_on(PAPER_START)
+    bh = (btc_now / btc_start - 1) * 100 if btc_now and btc_start else None
+    out = [f"---\ntype: report\nproject: trading-bot\ndate: {now:%Y-%m-%d}\n---",
+           f"# Paper trading weekly report - {now:%Y-%m-%d}", "",
+           f"Paper since {PAPER_START}. Fake money {START_BAL:.0f} USDT per bot. Dry-run only.", "",
+           "| Bot | Equity USDT | Return % | Closed | Open | Wins |", "|---|---|---|---|---|---|"]
+    stats = {}
+    for name, db in BOTS.items():
+        try:
+            s = bot_stats(db)
+            stats[name] = s
+            out.append(f"| {name} | {s['equity']:.2f} | {s['return_pct']:+.2f} | {s['trades_closed']} | "
+                       f"{s['trades_open']} | {s['wins']} |")
+        except Exception as e:
+            out.append(f"| {name} | ERROR {type(e).__name__}: {e} | | | | |")
+    out.append(f"| BTC buy & hold | | {bh:+.2f} | | | |" if bh is not None else "| BTC buy & hold | n/a (price fetch failed) | | | | |")
+    out += ["", "## Trades"]
+    for name, s in stats.items():
+        out.append(f"**{name}**")
+        if not s["rows"]:
+            out.append("- no trades yet (normal: slow daily trend strategy)")
+        for r in s["rows"]:
+            res = "open" if r["is_open"] else f"{(r['close_profit'] or 0) * 100:+.2f}% ({r['exit_reason']})"
+            out.append(f"- {r['pair']} in {str(r['open_date'])[:10]} @ {r['open_rate']:.2f}, "
+                       f"stake {r['stake_amount']:.0f} -> {res}")
+    out += ["", "## Gate check (needs 4+ weeks)",
+            "- max drawdown <= 20%, beat BTC hold or similar return with half the drawdown, no crash / missed stop."]
+    print("\n".join(out))
+
+
+if __name__ == "__main__":
+    main()

@@ -6,6 +6,7 @@ usage (inside container):
 Strategy parameters come from env TS_* (read when the strategy file is loaded).
 Each run appends one JSON line with the main metrics + the trade list.
 """
+import gc
 import json
 import logging
 import sys
@@ -71,3 +72,5 @@ for job in sys.argv[4:]:
         f.write(json.dumps(rec, default=str) + "\n")
     print(f"done {label} {timerange} fee={fee} trades={rec['total_trades']} "
           f"profit={rec['profit_total']:.4f} dd={rec['max_drawdown_account']}", flush=True)
+    del bt, st, rec, config
+    gc.collect()  # container has 768m limit; free memory between jobs

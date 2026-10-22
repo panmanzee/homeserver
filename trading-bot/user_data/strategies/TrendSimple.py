@@ -54,8 +54,8 @@ class TrendSimple(IStrategy):
     turb_q = _env_float("TS_TURB_Q", 0.90)
 
     # --- risk settings ---
-    risk_per_trade = 0.01      # 1% of equity lost if the stop is hit
-    max_stake_ratio = 0.50     # never more than 50% of equity in one trade
+    risk_per_trade = _env_float("TS_RISK", 0.01)        # 1% of equity lost if the stop is hit
+    max_stake_ratio = _env_float("TS_MAX_STAKE", 0.50)  # never more than 50% of equity in one trade
     min_stop_dist = 0.03
     max_stop_dist = 0.15
     daily_loss_limit = 0.03    # no new entries after -3% realised in the last 24h
