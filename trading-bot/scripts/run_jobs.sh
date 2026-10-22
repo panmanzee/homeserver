@@ -12,7 +12,7 @@ for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
   have=$( [ -f "$HOSTOUT" ] && wc -l < "$HOSTOUT" || echo 0 )
   [ "$have" -ge "$need" ] && break
   docker compose run --rm -T $envs --entrypoint python freqtrade \
-    /freqtrade/user_data/scripts/bt_worker.py $OUT/$label.jsonl TrendSimple $label "$@" 2>&1 \
+    /freqtrade/user_data/scripts/bt_worker.py $OUT/$label.jsonl ${STRAT:-TrendSimple} $label "$@" 2>&1 \
     | grep -E '^done|Error|Traceback' | grep -v cached || true
 done
 have=$( [ -f "$HOSTOUT" ] && wc -l < "$HOSTOUT" || echo 0 )

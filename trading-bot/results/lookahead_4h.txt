@@ -1,0 +1,210 @@
+ Container trading-bot-freqtrade-run-ad098b4c345c Creating 
+ Container trading-bot-freqtrade-run-ad098b4c345c Created 
+2026-10-22 20:44:08,844 - freqtrade - INFO - freqtrade 2026.9
+2026-10-22 20:44:09,494 - numexpr.utils - INFO - NumExpr defaulting to 4 threads.
+2026-10-22 20:44:16,693 - freqtrade.configuration.load_config - INFO - Using config: /freqtrade/user_data/config.json ...
+2026-10-22 20:44:16,694 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__API_SERVER__JWT_SECRET_KEY'
+2026-10-22 20:44:16,694 - freqtrade.configuration.environment_vars - INFO - Key parts: ['API_SERVER', 'JWT_SECRET_KEY']
+2026-10-22 20:44:16,695 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__API_SERVER__PASSWORD'
+2026-10-22 20:44:16,695 - freqtrade.configuration.environment_vars - INFO - Key parts: ['API_SERVER', 'PASSWORD']
+2026-10-22 20:44:16,695 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__API_SERVER__USERNAME'
+2026-10-22 20:44:16,696 - freqtrade.configuration.environment_vars - INFO - Key parts: ['API_SERVER', 'USERNAME']
+2026-10-22 20:44:16,696 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__API_SERVER__WS_TOKEN'
+2026-10-22 20:44:16,696 - freqtrade.configuration.environment_vars - INFO - Key parts: ['API_SERVER', 'WS_TOKEN']
+2026-10-22 20:44:16,697 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__BOT_NAME'
+2026-10-22 20:44:16,697 - freqtrade.configuration.environment_vars - INFO - Key parts: ['BOT_NAME']
+2026-10-22 20:44:16,698 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__DRY_RUN'
+2026-10-22 20:44:16,698 - freqtrade.configuration.environment_vars - INFO - Key parts: ['DRY_RUN']
+2026-10-22 20:44:16,700 - freqtrade.loggers - INFO - Enabling colorized output.
+2026-10-22 20:44:16,701 - freqtrade.loggers - INFO - Logfile configured
+2026-10-22 20:44:16,701 - freqtrade.loggers - INFO - Verbosity set to 0
+2026-10-22 20:44:16,702 - freqtrade.configuration.configuration - INFO - Parameter -i/--timeframe detected ... Using timeframe: 4h ...
+2026-10-22 20:44:16,702 - freqtrade.configuration.configuration - INFO - Parameter --timerange detected: 20190101-20261021 ...
+2026-10-22 20:44:16,713 - freqtrade.configuration.configuration - INFO - Using user-data directory: /freqtrade/user_data ...
+2026-10-22 20:44:16,714 - freqtrade.configuration.configuration - INFO - Using data directory: /freqtrade/user_data/data/binance ...
+2026-10-22 20:44:16,714 - freqtrade.configuration.configuration - INFO - Filter trades by timerange: 20190101-20261021
+2026-10-22 20:44:16,725 - freqtrade.exchange.check_exchange - INFO - Checking exchange...
+2026-10-22 20:44:16,734 - freqtrade.exchange.check_exchange - INFO - Exchange "binance" is officially supported by the Freqtrade development team.
+2026-10-22 20:44:16,735 - freqtrade.configuration.configuration - INFO - Using pairlist from configuration.
+2026-10-22 20:44:16,735 - freqtrade.configuration.config_validation - INFO - Validating configuration ...
+2026-10-22 20:44:16,738 - freqtrade.optimize.analysis.lookahead_helpers - INFO - Forced order_types to market orders.
+2026-10-22 20:44:16,738 - freqtrade.optimize.analysis.lookahead_helpers - INFO - Forced max_open_trades to -1 (same amount as there are pairs)
+2026-10-22 20:44:16,738 - freqtrade.optimize.analysis.lookahead_helpers - INFO - Dry run wallet was not set to 1 billion, pushing it up there just to avoid false positives
+2026-10-22 20:44:16,739 - freqtrade.optimize.analysis.lookahead_helpers - INFO - fixing stake_amount to 10k
+2026-10-22 20:44:16,762 - freqtrade.optimize.analysis.lookahead_helpers - INFO - Bias test of TrendSimple.py started.
+2026-10-22 20:44:16,763 - freqtrade.exchange.exchange - INFO - Instance is running with dry_run enabled
+2026-10-22 20:44:16,764 - freqtrade.exchange.exchange - INFO - Using CCXT 4.5.84
+2026-10-22 20:44:16,772 - freqtrade.exchange.exchange - INFO - Using Exchange "Binance"
+2026-10-22 20:44:18,370 - freqtrade.resolvers.exchange_resolver - INFO - Using resolved exchange class 'Binance' ...
+2026-10-22 20:44:18,376 - freqtrade.resolvers.iresolver - INFO - Using resolved strategy TrendSimple from '/freqtrade/user_data/strategies/TrendSimple.py'...
+2026-10-22 20:44:18,377 - freqtrade.strategy.hyper - INFO - Found no parameter file.
+2026-10-22 20:44:18,378 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'timeframe' with value from the configuration: 4h.
+2026-10-22 20:44:18,378 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'order_types' with value from the configuration: {'entry': 'market', 'exit': 'market', 'stoploss': 'market', 
+'stoploss_on_exchange': False}.
+2026-10-22 20:44:18,379 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'stake_currency' with value from the configuration: USDT.
+2026-10-22 20:44:18,380 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'stake_amount' with value from the configuration: 10000.
+2026-10-22 20:44:18,380 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'unfilledtimeout' with value from the configuration: {'entry': 30, 'exit': 30, 'exit_timeout_count': 0, 
+'unit': 'minutes'}.
+2026-10-22 20:44:18,381 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'max_open_trades' with value from the configuration: -1.
+2026-10-22 20:44:18,381 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using minimal_roi: {'0': 100}
+2026-10-22 20:44:18,382 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using timeframe: 4h
+2026-10-22 20:44:18,383 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using stoploss: -0.15
+2026-10-22 20:44:18,383 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using trailing_stop: False
+2026-10-22 20:44:18,384 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using trailing_stop_positive_offset: 0.0
+2026-10-22 20:44:18,384 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using trailing_only_offset_is_reached: False
+2026-10-22 20:44:18,385 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using use_custom_stoploss: True
+2026-10-22 20:44:18,385 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using process_only_new_candles: True
+2026-10-22 20:44:18,386 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using order_types: {'entry': 'market', 'exit': 'market', 'stoploss': 'market', 'stoploss_on_exchange': False}
+2026-10-22 20:44:18,387 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using order_time_in_force: {'entry': 'GTC', 'exit': 'GTC'}
+2026-10-22 20:44:18,387 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using stake_currency: USDT
+2026-10-22 20:44:18,388 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using stake_amount: 10000
+2026-10-22 20:44:18,388 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using startup_candle_count: 1260
+2026-10-22 20:44:18,389 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using unfilledtimeout: {'entry': 30, 'exit': 30, 'exit_timeout_count': 0, 'unit': 'minutes'}
+2026-10-22 20:44:18,390 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using use_exit_signal: True
+2026-10-22 20:44:18,390 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using exit_profit_only: False
+2026-10-22 20:44:18,391 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using ignore_roi_if_entry_signal: False
+2026-10-22 20:44:18,391 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using exit_profit_offset: 0.0
+2026-10-22 20:44:18,392 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using disable_dataframe_checks: False
+2026-10-22 20:44:18,393 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using ignore_buying_expired_candle_after: 0
+2026-10-22 20:44:18,393 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using position_adjustment_enable: False
+2026-10-22 20:44:18,394 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using max_entry_position_adjustment: -1
+2026-10-22 20:44:18,394 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using max_open_trades: -1
+2026-10-22 20:44:18,395 - freqtrade.configuration.config_validation - INFO - Validating configuration ...
+2026-10-22 20:44:18,405 - freqtrade.resolvers.iresolver - INFO - Using resolved pairlist StaticPairList from '/freqtrade/freqtrade/plugins/pairlist/StaticPairList.py'...
+2026-10-22 20:44:18,422 - freqtrade.optimize.backtesting - INFO - Using fee 0.1000% - worst case fee from exchange (lowest tier).
+2026-10-22 20:44:18,423 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:18,558 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2026-10-21 00:00:00 (3060 days).
+2026-10-22 20:44:30,213 - freqtrade.loggers.set_log_levels - INFO - Reducing verbosity for bias tester.
+2026-10-22 20:44:30,214 - freqtrade.optimize.analysis.lookahead - INFO - Found 96 trades, calculating 20 trades.
+2026-10-22 20:44:30,255 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:30,288 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-02-17 16:00:00 (257 days).
+2026-10-22 20:44:30,378 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:30,403 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-02-24 16:00:00 (264 days).
+2026-10-22 20:44:30,555 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:30,624 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-02-24 00:00:00 (264 days).
+2026-10-22 20:44:30,712 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:30,733 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-02-24 16:00:00 (264 days).
+2026-10-22 20:44:30,852 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:30,877 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-04-02 12:00:00 (301 days).
+2026-10-22 20:44:31,015 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:31,044 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-04-04 00:00:00 (303 days).
+2026-10-22 20:44:31,195 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:31,218 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-04-08 08:00:00 (307 days).
+2026-10-22 20:44:31,357 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:31,377 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-04-26 00:00:00 (325 days).
+2026-10-22 20:44:31,682 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:31,720 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-03-29 16:00:00 (297 days).
+2026-10-22 20:44:31,834 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:31,858 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-05-17 04:00:00 (346 days).
+2026-10-22 20:44:32,373 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:32,400 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-05-07 08:00:00 (336 days).
+2026-10-22 20:44:32,748 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:32,771 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-05-17 12:00:00 (346 days).
+2026-10-22 20:44:33,121 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:33,144 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-05-27 00:00:00 (356 days).
+2026-10-22 20:44:33,552 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:33,575 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-06-04 20:00:00 (364 days).
+2026-10-22 20:44:34,040 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:34,060 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-05-30 08:00:00 (359 days).
+2026-10-22 20:44:34,396 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:34,422 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-06-09 20:00:00 (369 days).
+2026-10-22 20:44:34,798 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:34,819 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-06-16 12:00:00 (376 days).
+2026-10-22 20:44:35,255 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:35,281 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-06-27 00:00:00 (387 days).
+2026-10-22 20:44:35,893 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:35,926 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-06-21 08:00:00 (381 days).
+2026-10-22 20:44:36,339 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:36,358 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-06-27 12:00:00 (387 days).
+2026-10-22 20:44:36,770 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:36,791 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-08-05 08:00:00 (426 days).
+2026-10-22 20:44:37,292 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:37,314 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2019-08-13 20:00:00 (434 days).
+2026-10-22 20:44:38,031 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:38,056 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-01-15 00:00:00 (589 days).
+2026-10-22 20:44:38,563 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:38,588 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-02-16 20:00:00 (621 days).
+2026-10-22 20:44:39,263 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:39,286 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-01-08 00:00:00 (582 days).
+2026-10-22 20:44:40,046 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:40,081 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-02-20 00:00:00 (625 days).
+2026-10-22 20:44:41,117 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:41,150 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-04-18 20:00:00 (683 days).
+2026-10-22 20:44:41,971 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:41,996 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-05-10 04:00:00 (705 days).
+2026-10-22 20:44:42,895 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:42,921 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-04-29 16:00:00 (694 days).
+2026-10-22 20:44:44,053 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:44,079 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-05-10 04:00:00 (705 days).
+2026-10-22 20:44:45,265 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:45,303 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-05-29 04:00:00 (724 days).
+2026-10-22 20:44:46,418 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:46,439 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-06-15 08:00:00 (741 days).
+2026-10-22 20:44:47,514 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:47,537 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-06-02 04:00:00 (728 days).
+2026-10-22 20:44:48,523 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:48,544 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-06-15 08:00:00 (741 days).
+2026-10-22 20:44:49,591 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:49,620 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-07-23 04:00:00 (779 days).
+2026-10-22 20:44:50,847 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:50,885 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-08-02 08:00:00 (789 days).
+2026-10-22 20:44:52,185 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:52,205 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-07-23 04:00:00 (779 days).
+2026-10-22 20:44:53,147 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:53,184 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-08-02 08:00:00 (789 days).
+2026-10-22 20:44:54,319 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:54,341 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-08-14 04:00:00 (801 days).
+2026-10-22 20:44:55,439 - freqtrade.exchange.exchange - WARNING - Using 2 calls to get OHLCV. This can result in slower operations for the bot. Please check if you really need 1260 candles for your 
+strategy.
+2026-10-22 20:44:55,465 - freqtrade.optimize.backtesting - INFO - Loading data from 2018-06-05 00:00:00 up to 2020-08-25 20:00:00 (812 days).
+2026-10-22 20:44:56,448 - freqtrade.optimize.analysis.lookahead - INFO - Found targeted trade amount = 20 signals.
+2026-10-22 20:44:56,449 - freqtrade.loggers.set_log_levels - INFO - Restoring log verbosity.
+2026-10-22 20:44:56,449 - freqtrade.optimize.analysis.lookahead - INFO - TrendSimple: no bias detected
+2026-10-22 20:44:56,450 - freqtrade.optimize.analysis.lookahead_helpers - INFO - Checking look ahead bias via backtests of TrendSimple.py took 40 seconds.
+Analyzing trades ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 20/20 100% • 0:00:26 • 0:00:00
+                                                     Lookahead Analysis                                                     
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+┃       filename ┃    strategy ┃ has_bias ┃ total_signals ┃ biased_entry_signals ┃ biased_exit_signals ┃ biased_indicators ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
+│ TrendSimple.py │ TrendSimple │       No │            20 │                    0 │                   0 │                   │
+└────────────────┴─────────────┴──────────┴───────────────┴──────────────────────┴─────────────────────┴───────────────────┘

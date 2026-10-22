@@ -48,6 +48,8 @@ for job in sys.argv[4:]:
         "fee": float(fee),
         "export": "none",
     }
+    if os.environ.get("TS_TF"):  # config.json says 1d; config wins over strategy, so pass it here
+        args["timeframe"] = os.environ["TS_TF"]
     config = setup_optimize_configuration(args, RunMode.BACKTEST)
     bt = Backtesting(config)
     bt.start()

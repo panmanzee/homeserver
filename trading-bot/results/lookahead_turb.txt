@@ -1,0 +1,186 @@
+ Container trading-bot-freqtrade-run-4812bd769769 Creating 
+ Container trading-bot-freqtrade-run-4812bd769769 Created 
+2026-10-22 20:45:32,038 - freqtrade - INFO - freqtrade 2026.9
+2026-10-22 20:45:37,596 - numexpr.utils - INFO - NumExpr defaulting to 4 threads.
+2026-10-22 20:46:01,168 - freqtrade.configuration.load_config - INFO - Using config: /freqtrade/user_data/config.json ...
+2026-10-22 20:46:01,172 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__API_SERVER__JWT_SECRET_KEY'
+2026-10-22 20:46:01,172 - freqtrade.configuration.environment_vars - INFO - Key parts: ['API_SERVER', 'JWT_SECRET_KEY']
+2026-10-22 20:46:01,173 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__API_SERVER__PASSWORD'
+2026-10-22 20:46:01,175 - freqtrade.configuration.environment_vars - INFO - Key parts: ['API_SERVER', 'PASSWORD']
+2026-10-22 20:46:01,176 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__API_SERVER__USERNAME'
+2026-10-22 20:46:01,176 - freqtrade.configuration.environment_vars - INFO - Key parts: ['API_SERVER', 'USERNAME']
+2026-10-22 20:46:01,178 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__API_SERVER__WS_TOKEN'
+2026-10-22 20:46:01,179 - freqtrade.configuration.environment_vars - INFO - Key parts: ['API_SERVER', 'WS_TOKEN']
+2026-10-22 20:46:01,182 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__BOT_NAME'
+2026-10-22 20:46:01,183 - freqtrade.configuration.environment_vars - INFO - Key parts: ['BOT_NAME']
+2026-10-22 20:46:01,183 - freqtrade.configuration.environment_vars - INFO - Loading variable 'FREQTRADE__DRY_RUN'
+2026-10-22 20:46:01,184 - freqtrade.configuration.environment_vars - INFO - Key parts: ['DRY_RUN']
+2026-10-22 20:46:01,189 - freqtrade.loggers - INFO - Enabling colorized output.
+2026-10-22 20:46:01,190 - freqtrade.loggers - INFO - Logfile configured
+2026-10-22 20:46:01,191 - freqtrade.loggers - INFO - Verbosity set to 0
+2026-10-22 20:46:01,192 - freqtrade.configuration.configuration - INFO - Parameter --timerange detected: 20190101-20261021 ...
+2026-10-22 20:46:02,662 - freqtrade.configuration.configuration - INFO - Using user-data directory: /freqtrade/user_data ...
+2026-10-22 20:46:02,663 - freqtrade.configuration.configuration - INFO - Using data directory: /freqtrade/user_data/data/binance ...
+2026-10-22 20:46:02,663 - freqtrade.configuration.configuration - INFO - Filter trades by timerange: 20190101-20261021
+2026-10-22 20:46:02,736 - freqtrade.exchange.check_exchange - INFO - Checking exchange...
+2026-10-22 20:46:02,746 - freqtrade.exchange.check_exchange - INFO - Exchange "binance" is officially supported by the Freqtrade development team.
+2026-10-22 20:46:02,746 - freqtrade.configuration.configuration - INFO - Using pairlist from configuration.
+2026-10-22 20:46:02,747 - freqtrade.configuration.config_validation - INFO - Validating configuration ...
+2026-10-22 20:46:02,751 - freqtrade.optimize.analysis.lookahead_helpers - INFO - Forced order_types to market orders.
+2026-10-22 20:46:02,752 - freqtrade.optimize.analysis.lookahead_helpers - INFO - Forced max_open_trades to -1 (same amount as there are pairs)
+2026-10-22 20:46:02,753 - freqtrade.optimize.analysis.lookahead_helpers - INFO - Dry run wallet was not set to 1 billion, pushing it up there just to avoid false positives
+2026-10-22 20:46:02,753 - freqtrade.optimize.analysis.lookahead_helpers - INFO - fixing stake_amount to 10k
+2026-10-22 20:46:02,973 - freqtrade.optimize.analysis.lookahead_helpers - INFO - Bias test of TrendSimple.py started.
+2026-10-22 20:46:02,974 - freqtrade.exchange.exchange - INFO - Instance is running with dry_run enabled
+2026-10-22 20:46:02,975 - freqtrade.exchange.exchange - INFO - Using CCXT 4.5.84
+2026-10-22 20:46:02,984 - freqtrade.exchange.exchange - INFO - Using Exchange "Binance"
+2026-10-22 20:46:04,446 - freqtrade.resolvers.exchange_resolver - INFO - Using resolved exchange class 'Binance' ...
+2026-10-22 20:46:04,450 - freqtrade.resolvers.iresolver - INFO - Using resolved strategy TrendSimple from '/freqtrade/user_data/strategies/TrendSimple.py'...
+2026-10-22 20:46:04,450 - freqtrade.strategy.hyper - INFO - Found no parameter file.
+2026-10-22 20:46:04,451 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'timeframe' with value from the configuration: 1d.
+2026-10-22 20:46:04,452 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'order_types' with value from the configuration: {'entry': 'market', 'exit': 'market', 'stoploss': 'market', 
+'stoploss_on_exchange': False}.
+2026-10-22 20:46:04,452 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'stake_currency' with value from the configuration: USDT.
+2026-10-22 20:46:04,453 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'stake_amount' with value from the configuration: 10000.
+2026-10-22 20:46:04,453 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'unfilledtimeout' with value from the configuration: {'entry': 30, 'exit': 30, 'exit_timeout_count': 0, 
+'unit': 'minutes'}.
+2026-10-22 20:46:04,454 - freqtrade.resolvers.strategy_resolver - INFO - Override strategy 'max_open_trades' with value from the configuration: -1.
+2026-10-22 20:46:04,454 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using minimal_roi: {'0': 100}
+2026-10-22 20:46:04,454 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using timeframe: 1d
+2026-10-22 20:46:04,455 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using stoploss: -0.15
+2026-10-22 20:46:04,455 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using trailing_stop: False
+2026-10-22 20:46:04,456 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using trailing_stop_positive_offset: 0.0
+2026-10-22 20:46:04,456 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using trailing_only_offset_is_reached: False
+2026-10-22 20:46:04,456 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using use_custom_stoploss: True
+2026-10-22 20:46:04,457 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using process_only_new_candles: True
+2026-10-22 20:46:04,457 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using order_types: {'entry': 'market', 'exit': 'market', 'stoploss': 'market', 'stoploss_on_exchange': False}
+2026-10-22 20:46:04,458 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using order_time_in_force: {'entry': 'GTC', 'exit': 'GTC'}
+2026-10-22 20:46:04,458 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using stake_currency: USDT
+2026-10-22 20:46:04,458 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using stake_amount: 10000
+2026-10-22 20:46:04,459 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using startup_candle_count: 622
+2026-10-22 20:46:04,459 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using unfilledtimeout: {'entry': 30, 'exit': 30, 'exit_timeout_count': 0, 'unit': 'minutes'}
+2026-10-22 20:46:04,460 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using use_exit_signal: True
+2026-10-22 20:46:04,460 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using exit_profit_only: False
+2026-10-22 20:46:04,460 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using ignore_roi_if_entry_signal: False
+2026-10-22 20:46:04,461 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using exit_profit_offset: 0.0
+2026-10-22 20:46:04,461 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using disable_dataframe_checks: False
+2026-10-22 20:46:04,462 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using ignore_buying_expired_candle_after: 0
+2026-10-22 20:46:04,462 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using position_adjustment_enable: False
+2026-10-22 20:46:04,463 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using max_entry_position_adjustment: -1
+2026-10-22 20:46:04,463 - freqtrade.resolvers.strategy_resolver - INFO - Strategy using max_open_trades: -1
+2026-10-22 20:46:04,463 - freqtrade.configuration.config_validation - INFO - Validating configuration ...
+2026-10-22 20:46:04,469 - freqtrade.resolvers.iresolver - INFO - Using resolved pairlist StaticPairList from '/freqtrade/freqtrade/plugins/pairlist/StaticPairList.py'...
+2026-10-22 20:46:04,479 - freqtrade.optimize.backtesting - INFO - Using fee 0.1000% - worst case fee from exchange (lowest tier).
+2026-10-22 20:46:10,041 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:11,808 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:11,823 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2026-10-21 00:00:00 (3352 days).
+2026-10-22 20:46:12,464 - freqtrade.data.dataprovider - INFO - Loading data for ETH/USDT 1d from 2017-04-19 00:00:00 to 2026-10-21 00:00:00
+2026-10-22 20:46:12,472 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:13,669 - freqtrade.data.dataprovider - INFO - Loading data for BTC/USDT 1d from 2017-04-19 00:00:00 to 2026-10-21 00:00:00
+2026-10-22 20:46:13,677 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:15,797 - freqtrade.loggers.set_log_levels - INFO - Reducing verbosity for bias tester.
+2026-10-22 20:46:15,798 - freqtrade.optimize.analysis.lookahead - INFO - Found 64 trades, calculating 20 trades.
+2026-10-22 20:46:15,957 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:15,971 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2019-05-12 00:00:00 (633 days).
+2026-10-22 20:46:16,159 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:16,174 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2019-05-18 00:00:00 (639 days).
+2026-10-22 20:46:16,298 - freqtrade.optimize.analysis.lookahead - INFO - found lookahead-bias in trade pair: BTC/USDT, timerange:2019-05-11 00:00:00+00:00 - 2019-05-17 00:00:00+00:00, idx: 0
+2026-10-22 20:46:16,519 - freqtrade.optimize.analysis.lookahead - INFO - => found look ahead bias in column turb. 0.5294101305867975 != 0.5249160727430918
+2026-10-22 20:46:16,521 - freqtrade.optimize.analysis.lookahead - INFO - => found look ahead bias in column turb_thr. nan != nan
+2026-10-22 20:46:16,522 - freqtrade.optimize.analysis.lookahead - INFO - => found look ahead bias in column enter_tag. nan != nan
+2026-10-22 20:46:16,523 - freqtrade.optimize.analysis.lookahead - INFO - => found look ahead bias in column enter_long. nan != nan
+2026-10-22 20:46:16,566 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:16,587 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2019-05-29 00:00:00 (650 days).
+2026-10-22 20:46:16,854 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:16,876 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2019-06-28 00:00:00 (680 days).
+2026-10-22 20:46:17,239 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:17,260 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2019-06-23 00:00:00 (675 days).
+2026-10-22 20:46:17,443 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:17,460 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2019-06-28 00:00:00 (680 days).
+2026-10-22 20:46:17,724 - freqtrade.optimize.analysis.lookahead - INFO - found lookahead-bias in trade pair: ETH/USDT, timerange:2019-06-22 00:00:00+00:00 - 2019-06-27 00:00:00+00:00, idx: 2
+2026-10-22 20:46:17,807 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:17,824 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2019-08-07 00:00:00 (720 days).
+2026-10-22 20:46:18,050 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:18,067 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2019-08-15 00:00:00 (728 days).
+2026-10-22 20:46:18,273 - freqtrade.optimize.analysis.lookahead - INFO - found lookahead-bias in trade pair: BTC/USDT, timerange:2019-08-06 00:00:00+00:00 - 2019-08-14 00:00:00+00:00, idx: 3
+2026-10-22 20:46:18,359 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:18,386 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-02-04 00:00:00 (901 days).
+2026-10-22 20:46:18,622 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:18,638 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-02-17 00:00:00 (914 days).
+2026-10-22 20:46:18,932 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:18,946 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-01-30 00:00:00 (896 days).
+2026-10-22 20:46:19,258 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:19,270 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-02-26 00:00:00 (923 days).
+2026-10-22 20:46:19,645 - freqtrade.optimize.analysis.lookahead - INFO - found lookahead-bias in trade pair: BTC/USDT, timerange:2020-01-29 00:00:00+00:00 - 2020-02-25 00:00:00+00:00, idx: 5
+2026-10-22 20:46:19,689 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:19,701 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-04-27 00:00:00 (984 days).
+2026-10-22 20:46:19,960 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:19,972 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-05-12 00:00:00 (999 days).
+2026-10-22 20:46:20,338 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:20,357 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-06-03 00:00:00 (1021 days).
+2026-10-22 20:46:20,684 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:20,699 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-06-16 00:00:00 (1034 days).
+2026-10-22 20:46:20,979 - freqtrade.optimize.analysis.lookahead - INFO - found lookahead-bias in trade pair: BTC/USDT, timerange:2020-06-02 00:00:00+00:00 - 2020-06-15 00:00:00+00:00, idx: 7
+2026-10-22 20:46:21,026 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:21,038 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-05-30 00:00:00 (1017 days).
+2026-10-22 20:46:21,347 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:21,363 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-06-28 00:00:00 (1046 days).
+2026-10-22 20:46:21,710 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:21,727 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-07-25 00:00:00 (1073 days).
+2026-10-22 20:46:22,059 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:22,074 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-08-03 00:00:00 (1082 days).
+2026-10-22 20:46:22,387 - freqtrade.optimize.analysis.lookahead - INFO - found lookahead-bias in trade pair: BTC/USDT, timerange:2020-07-24 00:00:00+00:00 - 2020-08-02 00:00:00+00:00, idx: 9
+2026-10-22 20:46:22,437 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:22,451 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-07-25 00:00:00 (1073 days).
+2026-10-22 20:46:22,764 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:22,776 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-08-03 00:00:00 (1082 days).
+2026-10-22 20:46:23,094 - freqtrade.optimize.analysis.lookahead - INFO - found lookahead-bias in trade pair: ETH/USDT, timerange:2020-07-24 00:00:00+00:00 - 2020-08-02 00:00:00+00:00, idx: 10
+2026-10-22 20:46:23,139 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:23,153 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-08-19 00:00:00 (1098 days).
+2026-10-22 20:46:23,469 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:23,482 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-09-03 00:00:00 (1113 days).
+2026-10-22 20:46:23,825 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:23,838 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-08-16 00:00:00 (1095 days).
+2026-10-22 20:46:24,160 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:24,173 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-09-04 00:00:00 (1114 days).
+2026-10-22 20:46:24,548 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:24,561 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-10-14 00:00:00 (1154 days).
+2026-10-22 20:46:24,915 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:24,927 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-10-18 00:00:00 (1158 days).
+2026-10-22 20:46:25,348 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:25,369 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-10-12 00:00:00 (1152 days).
+2026-10-22 20:46:25,746 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:25,766 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-11-27 00:00:00 (1198 days).
+2026-10-22 20:46:26,189 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:26,202 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-10-24 00:00:00 (1164 days).
+2026-10-22 20:46:26,551 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:26,564 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-11-27 00:00:00 (1198 days).
+2026-10-22 20:46:27,027 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:27,039 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-12-21 00:00:00 (1222 days).
+2026-10-22 20:46:27,463 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:27,476 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2021-01-12 00:00:00 (1244 days).
+2026-10-22 20:46:27,944 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:27,957 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2020-12-30 00:00:00 (1231 days).
+2026-10-22 20:46:28,376 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:28,388 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2021-01-12 00:00:00 (1244 days).
+2026-10-22 20:46:28,798 - freqtrade.optimize.analysis.lookahead - INFO - found lookahead-bias in trade pair: ETH/USDT, timerange:2020-12-29 00:00:00+00:00 - 2021-01-11 00:00:00+00:00, idx: 17
+2026-10-22 20:46:28,843 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:28,857 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2021-02-04 00:00:00 (1267 days).
+2026-10-22 20:46:29,323 - freqtrade.data.history.datahandlers.idatahandler - WARNING - ETH/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:29,337 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2021-02-23 00:00:00 (1286 days).
+2026-10-22 20:46:29,878 - freqtrade.optimize.analysis.lookahead - INFO - found lookahead-bias in trade pair: ETH/USDT, timerange:2021-02-03 00:00:00+00:00 - 2021-02-22 00:00:00+00:00, idx: 18
+2026-10-22 20:46:29,928 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:29,943 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2021-02-08 00:00:00 (1271 days).
+2026-10-22 20:46:30,415 - freqtrade.data.history.datahandlers.idatahandler - WARNING - BTC/USDT, spot, 1d, data starts at 2017-08-17 00:00:00
+2026-10-22 20:46:30,433 - freqtrade.optimize.backtesting - INFO - Loading data from 2017-08-17 00:00:00 up to 2021-02-24 00:00:00 (1287 days).
+2026-10-22 20:46:30,936 - freqtrade.optimize.analysis.lookahead - INFO - Found targeted trade amount = 20 signals.
+2026-10-22 20:46:30,937 - freqtrade.loggers.set_log_levels - INFO - Restoring log verbosity.
+2026-10-22 20:46:30,937 - freqtrade.optimize.analysis.lookahead - INFO -  => TrendSimple : bias detected!
+2026-10-22 20:46:30,938 - freqtrade.optimize.analysis.lookahead_helpers - INFO - Checking look ahead bias via backtests of TrendSimple.py took 28 seconds.
+Analyzing trades ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 20/20 100% • 0:00:15 • 0:00:00
+                                                               Lookahead Analysis                                                               
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃       filename ┃    strategy ┃ has_bias ┃ total_signals ┃ biased_entry_signals ┃ biased_exit_signals ┃                     biased_indicators ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ TrendSimple.py │ TrendSimple │      Yes │            20 │                    9 │                   2 │ turb, turb_thr, enter_tag, enter_long │
+└────────────────┴─────────────┴──────────┴───────────────┴──────────────────────┴─────────────────────┴───────────────────────────────────────┘

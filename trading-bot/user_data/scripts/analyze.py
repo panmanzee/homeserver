@@ -37,6 +37,8 @@ def tr_dates(tr):
 
 def curve_metrics(eq: pd.Series):
     eq = eq.dropna()
+    # start every curve at START_BAL the day before the window (review fix: B&H entry fee + day-1 move count)
+    eq = pd.concat([pd.Series([START_BAL], index=[eq.index[0] - pd.Timedelta(days=1)]), eq])
     days = (eq.index[-1] - eq.index[0]).days or 1
     total = eq.iloc[-1] / eq.iloc[0] - 1
     cagr = (eq.iloc[-1] / eq.iloc[0]) ** (365.0 / days) - 1
@@ -47,9 +49,16 @@ def curve_metrics(eq: pd.Series):
             "max_dd": -dd, "days": days}
 
 
+def window_idx(s, e):
+    """daily candle dates inside the window; end is EXCLUSIVE like freqtrade timerange"""
+    idx = PX["BTC/USDT"].loc[s:e].index
+    return idx[idx < e]
+
+
 def strat_equity(rec):
     s, e = tr_dates(rec["timerange"])
-    idx = PX["BTC/USDT"].loc[s:e].index
+    fee = float(rec.get("fee", 0.0))
+    idx = window_idx(s, e)
     eq = pd.Series(START_BAL, index=idx, dtype=float)
     expo = pd.Series(0.0, index=idx)
     for t in rec["trades"]:
@@ -60,7 +69,8 @@ def strat_equity(rec):
         during = idx[(idx + pd.Timedelta(days=1) > od) & (idx + pd.Timedelta(days=1) <= cd)]
         if len(during):
             val = t["amount"] * px.reindex(during)
-            eq.loc[during] += (val - t["stake_amount"]).values
+            # open trade value after paying entry fee and the exit fee it would pay now
+            eq.loc[during] += (val * (1 - fee) - t["stake_amount"] * (1 + fee)).values
             expo.loc[during] += val.values
         after = idx[idx + pd.Timedelta(days=1) > cd]
         eq.loc[after] += t["profit_abs"]
@@ -75,6 +85,7 @@ def bh_equity(timerange, fee, pairs=("BTC/USDT",)):
     parts = []
     for p in pairs:
         px = PX[p].loc[s:e]
+        px = px[px.index < e]
         units = (START_BAL / len(pairs)) * (1 - fee) / px["open"].iloc[0]
         parts.append(units * px["close"])
     eq = sum(parts)
@@ -106,7 +117,7 @@ def random_entry(rec, fee, n_sims=1000):
         hold.append(max(1, int(round(t["trade_duration"] / 1440))))
         score_strat += f * t["profit_ratio"]
     fr, hold = np.array(fr), np.array(hold)
-    opens = {p: PX[p].loc[s:e, "open"].values for p in PX}
+    opens = {p: PX[p].loc[s:e - pd.Timedelta(days=1), "open"].values for p in PX}
     n = len(opens["BTC/USDT"])
     pairs = list(PX)
     scores = np.empty(n_sims)
@@ -175,7 +186,8 @@ def main():
         out["years"][str(fee)] = rows
     # --- walk-forward with parameter choice on TRAIN windows only (fee 0.25%)
     fee = 0.0025
-    labels = sorted({k[0] for k in runs if k[2] == fee and k[1] != FULL})
+    labels = sorted({k[0] for k in runs if k[2] == fee and k[1] != FULL
+                     and (k[0] == "default" or k[0].startswith("g_"))})  # WF candidates: param grid only
     yr = {lab: {y: runs[(lab, y, fee)]["profit_total"] for y in years if (lab, y, fee) in runs}
           for lab in labels}
     wf = []
@@ -196,6 +208,29 @@ def main():
                    "default_return": yr.get("default", {}).get(y)})
     out["walkforward"]["0.0025"] = wf
     out["grid_yearly_0.0025"] = yr
+    # --- same walk-forward for the 4h family (tf_4h = default 100/20/3, h_* = grid)
+    lab4 = sorted({k[0] for k in runs if k[2] == fee and k[1] != FULL
+                   and (k[0] == "tf_4h" or k[0].startswith("h_"))})
+    if len(lab4) > 1:
+        yr4 = {lab: {y: runs[(lab, y, fee)]["profit_total"] for y in years if (lab, y, fee) in runs}
+               for lab in lab4}
+        wf4 = []
+        for i, y in enumerate(years):
+            if i < 2:
+                continue
+            train = years[:i]
+            def score4(lab):
+                v = [math.log1p(yr4[lab][t]) for t in train if t in yr4[lab]]
+                return sum(v) if len(v) == len(train) else -1e9
+            best = max(lab4, key=score4)
+            if (best, y, fee) not in runs:
+                continue
+            m = summarize(runs[(best, y, fee)])
+            wf4.append({"test_window": y, "chosen_params": best, "test_return": m["total_return"],
+                        "test_max_dd": m["max_dd"], "trades": m["trades"],
+                        "default_return": yr4.get("tf_4h", {}).get(y)})
+        out["walkforward_4h"] = wf4
+        out["grid_yearly_4h"] = yr4
     # --- Monte Carlo trade-order shuffle (idea from jesse): how bad can drawdown get by luck of order
     for fee in (0.001, 0.0025):
         rec = runs.get(("default", FULL, fee))
@@ -219,6 +254,20 @@ def main():
         bh = curve_metrics(bh_equity(FULL2, 0.0025))
         filt["bh_btc@0.0025"] = bh
         out["filters"] = filt
+    # --- E4 position size variants on the full period (fee 0.25%), compared with default
+    var = {}
+    for lab in ("default", "s_r2_c50", "s_r3_c100", "jev", "tf_4h"):
+        rec = runs.get((lab, FULL, 0.0025))
+        if not rec:
+            continue
+        m = summarize(rec)
+        m["random"] = random_entry(rec, 0.0025)
+        m["mc_dd"] = mc_drawdown(rec)
+        m["years"] = {k[1]: runs[k]["profit_total"] for k in runs
+                      if k[0] == lab and k[2] == 0.0025 and k[1] != FULL}
+        var[lab] = m
+    if var:
+        out["sizing"] = var
     json.dump(out, open(f"{D}/summary.json", "w"), indent=1, default=str)
     print(json.dumps(out, indent=1, default=str)[:20000])
 

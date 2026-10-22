@@ -16,7 +16,8 @@ START_BAL = 3000.0
 PAPER_START = "2026-10-22"          # bots started 2026-10-22 16:48 UTC
 BTC_AT_START = None                 # filled from Binance daily kline of PAPER_START
 BOTS = {"A TrendSimple (no Jev)": f"{UD}/tradesv3.dryrun.sqlite",
-        "B TrendSimpleJev": f"{UD}/tradesv3.dryrun-jev.sqlite"}
+        "B TrendSimpleJev": f"{UD}/tradesv3.dryrun-jev.sqlite",
+        "C TrendSimple 4h (since 2026-10-23)": f"{UD}/tradesv3.dryrun-4h.sqlite"}
 
 
 def get_json(url):

@@ -42,13 +42,14 @@ def _env_float(name, default):
 class TrendSimple(IStrategy):
     INTERFACE_VERSION = 3
     can_short = False
-    timeframe = "1d"
+    timeframe = os.environ.get("TS_TF", "1d")
+    _K = {"1d": 1, "4h": 6}.get(timeframe, 1)   # candles per day; periods below are in DAYS x _K
 
     # --- the only strategy parameters ---
-    sma_long = _env_int("TS_SMA_LONG", 100)
-    breakout = _env_int("TS_BREAKOUT", 20)
-    sma_exit = _env_int("TS_SMA_EXIT", 50)
-    atr_mult = _env_float("TS_ATR_MULT", 3.0)
+    sma_long = _env_int("TS_SMA_LONG", 100) * _K
+    breakout = _env_int("TS_BREAKOUT", 20) * _K
+    sma_exit = _env_int("TS_SMA_EXIT", 50) * _K
+    atr_mult = _env_float("TS_ATR_MULT", 3.0) * _K ** 0.5   # ATR of 4h bars ~ daily ATR / sqrt(6)
     # experiment-only regime filters (default "none" = live behaviour unchanged)
     regime_filter = os.environ.get("TS_FILTER", "none")   # none | turb | adx
     turb_q = _env_float("TS_TURB_Q", 0.90)
@@ -67,23 +68,23 @@ class TrendSimple(IStrategy):
     use_exit_signal = True
     exit_profit_only = False
     process_only_new_candles = True
-    startup_candle_count = 210 if regime_filter != "turb" else 252 + 365 + 5
+    startup_candle_count = (210 if regime_filter != "turb" else 252 + 365 + 5) * _K
 
     @property
     def protections(self):
         return [
             # pause 2 candles after a trade closes on a pair
-            {"method": "CooldownPeriod", "stop_duration_candles": 2},
+            {"method": "CooldownPeriod", "stop_duration_candles": 2 * self._K},
             # 3 stop-losses within 30 days -> pause all trading 7 days
-            {"method": "StoplossGuard", "lookback_period_candles": 30, "trade_limit": 3,
-             "stop_duration_candles": 7, "only_per_pair": False},
+            {"method": "StoplossGuard", "lookback_period_candles": 30 * self._K, "trade_limit": 3,
+             "stop_duration_candles": 7 * self._K, "only_per_pair": False},
             # equity drawdown > 15% over the last year of closed trades -> pause 30 days
-            {"method": "MaxDrawdown", "lookback_period_candles": 365, "trade_limit": 1,
-             "stop_duration_candles": 30, "max_allowed_drawdown": 0.15,
+            {"method": "MaxDrawdown", "lookback_period_candles": 365 * self._K, "trade_limit": 1,
+             "stop_duration_candles": 30 * self._K, "max_allowed_drawdown": 0.15,
              "calculation_mode": "equity"},
             # daily loss limit (closed trades): > 3% equity drop within 1 day -> pause 1 day
-            {"method": "MaxDrawdown", "lookback_period_candles": 1, "trade_limit": 1,
-             "stop_duration_candles": 1, "max_allowed_drawdown": 0.03,
+            {"method": "MaxDrawdown", "lookback_period_candles": 1 * self._K, "trade_limit": 1,
+             "stop_duration_candles": 1 * self._K, "max_allowed_drawdown": 0.03,
              "calculation_mode": "equity"},
         ]
 
@@ -96,7 +97,7 @@ class TrendSimple(IStrategy):
         df["sma50"] = ta.SMA(df, timeperiod=50)
         # highest high of the PREVIOUS n candles (shift(1) => no look-ahead)
         df["hh"] = df["high"].rolling(self.breakout).max().shift(1)
-        df["atr"] = ta.ATR(df, timeperiod=14)
+        df["atr"] = ta.ATR(df, timeperiod=14 * self._K)
         df["adx"] = ta.ADX(df, timeperiod=14)
         df["stop_dist"] = (self.atr_mult * df["atr"] / df["close"]).clip(
             self.min_stop_dist, self.max_stop_dist)
