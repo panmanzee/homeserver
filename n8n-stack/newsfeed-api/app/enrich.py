@@ -9,12 +9,14 @@ validation before it reaches the database.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 
 import anthropic
+import httpx
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from tenacity import (
     retry,
@@ -25,6 +27,8 @@ from tenacity import (
 )
 
 from .config import settings
+
+log = logging.getLogger("enrich")
 
 EVENT_TYPES = (
     "earnings", "guidance", "product", "m&a", "regulation",
@@ -65,13 +69,15 @@ Hard rules:
   "breaking" only if it clearly clears the bar above. When unsure, go one level
   lower.
 - `tickers`: include a stock symbol only when you are confident the article is
-  about that specific listed company. Use uppercase symbols. Empty list is fine.
+  about that specific listed company. Each ticker is an object with its own
+  `symbol` and `company` fields together — never a separate list to zip up
+  later. Use uppercase symbols. Empty list is fine.
 - `topics`: 1-5 short lowercase tags (e.g. "ai-chips", "interest-rates").
 
 Produce exactly one structured result with these fields: summary, tickers,
-companies, topics, event_type, sentiment, sentiment_rationale, importance."""
+topics, event_type, sentiment, sentiment_rationale, importance."""
 
-PROMPT_INSTRUCTIONS_HASH = "v4"  # bump SYSTEM_PROMPT + this together
+PROMPT_INSTRUCTIONS_HASH = "v5"  # bump SYSTEM_PROMPT + this together
 
 # Single source of truth for the output shape. Anthropic wraps it as a tool;
 # Gemini takes it as a response_schema.
@@ -85,13 +91,15 @@ RESPONSE_SCHEMA: dict[str, Any] = {
         },
         "tickers": {
             "type": "array",
-            "items": {"type": "string"},
-            "description": "Uppercase stock symbols the article is clearly about.",
-        },
-        "companies": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Full company / organization names that are subjects.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Uppercase stock symbol, e.g. AAPL."},
+                    "company": {"type": "string", "description": "Full company name for this exact symbol, e.g. Apple Inc."},
+                },
+                "required": ["symbol", "company"],
+            },
+            "description": "Stock symbols the article is clearly about, each paired with its own company name (never guess a pairing — every symbol needs its own company field right here, not a separate list).",
         },
         "topics": {
             "type": "array",
@@ -107,7 +115,7 @@ RESPONSE_SCHEMA: dict[str, Any] = {
         "importance": {"type": "string", "enum": ["breaking", "notable", "routine"]},
     },
     "required": [
-        "summary", "tickers", "companies", "topics",
+        "summary", "tickers", "topics",
         "event_type", "sentiment", "sentiment_rationale", "importance",
     ],
 }
@@ -137,10 +145,14 @@ def _unwrap_scalar(v: Any) -> Any:
     return v
 
 
+class TickerRef(BaseModel):
+    symbol: str
+    company: str
+
+
 class NewsEnrichment(BaseModel):
     summary: list[str] = Field(min_length=1)
-    tickers: list[str] = []
-    companies: list[str] = []
+    tickers: list[TickerRef] = []
     topics: list[str] = []
     # The enum fields tolerate a missing / malformed model response: a usable
     # summary is never dropped over a miscategorised tag. `raw_response` keeps
@@ -176,6 +188,7 @@ class EnrichmentResult:
     output_tokens: int | None
     raw: dict[str, Any]
     model: str
+    jev_check: dict[str, Any] | None = None
 
 
 class EnrichmentError(RuntimeError):
@@ -210,30 +223,36 @@ def _dedupe(values: list[str], *, lower: bool = False) -> list[str]:
 
 
 def clean_output(data: NewsEnrichment) -> NewsEnrichment:
-    symbols = [s for s in (normalize_symbol(t) for t in data.tickers) if s]
+    seen: set[str] = set()
+    cleaned_tickers: list[TickerRef] = []
+    for t in data.tickers:
+        sym = normalize_symbol(t.symbol)
+        if not sym or sym in seen:
+            continue
+        seen.add(sym)
+        cleaned_tickers.append(TickerRef(symbol=sym, company=t.company.strip()))
     return data.model_copy(
         update={
             "summary": [s.strip() for s in data.summary if s.strip()],
-            "tickers": _dedupe(symbols),
-            "companies": _dedupe(data.companies),
+            "tickers": cleaned_tickers,
             "topics": _dedupe(data.topics, lower=True)[:5],
         }
     )
 
 
 def ticker_rows(data: NewsEnrichment) -> list[dict[str, str]]:
-    """Map cleaned tickers to `tickers` upsert rows.
+    """Map cleaned tickers to `tickers` upsert rows. Each symbol is paired
+    with its own company name directly from the model's output — no
+    positional zip, so a symbol can never get some other article's company
+    name (the bug this replaced).
 
     `price_symbol` defaults to the plain symbol (correct for US listings on
     Twelve Data / Yahoo). Fix non-US listings by hand in the `tickers` table.
     """
-    rows: list[dict[str, str]] = []
-    for i, sym in enumerate(data.tickers):
-        row: dict[str, str] = {"symbol": sym, "price_symbol": sym}
-        if i < len(data.companies):
-            row["name"] = data.companies[i]
-        rows.append(row)
-    return rows
+    return [
+        {"symbol": t.symbol, "price_symbol": t.symbol, "name": t.company}
+        for t in data.tickers
+    ]
 
 
 def build_user_content(item: dict[str, Any], body: str) -> str:
@@ -411,6 +430,63 @@ def _generate_gemini(
 
 
 # --------------------------------------------------------------------------- #
+# Jev decision gate — automatic second opinion on `importance`
+#
+# This is a real orchestrator step, not a manual/eval call: it runs on every
+# article that goes through `call_llm`, automatically, with no human trigger.
+# Jev classifies importance independently from the article summary/event
+# type/sentiment (NOT from re-reading the raw article — cheap and fast).
+# It NEVER silently overrides the primary LLM's verdict (that model read the
+# full article body and has more context) — it only:
+#   1. Logs agreement/disagreement so we can see the gate is doing real work.
+#   2. Surfaces its own confidence so low-confidence Jev calls are visibly
+#      not trusted (mirrors the escalate-below-threshold pattern already
+#      proven in the 397-article backtest).
+# Any network/timeout/parse failure degrades to `None` — enrichment must
+# never fail or block because the Jev sidecar is unreachable.
+# --------------------------------------------------------------------------- #
+_JEV_IMPORTANCE_LEVELS = {
+    "breaking": "Major, time-sensitive news that should interrupt the user immediately (e.g. large M&A, guidance cut, regulatory action, executive departure).",
+    "notable": "Meaningfully relevant news worth including in a daily digest, but not urgent enough to interrupt.",
+    "routine": "Low-signal or routine news (minor updates, small partnerships, recurring filings) that doesn't need highlighting.",
+}
+
+
+def jev_importance_check(data: NewsEnrichment) -> dict[str, Any] | None:
+    if not settings.jev_importance_gate_enabled:
+        return None
+    state = {
+        "summary": data.summary,
+        "event_type": data.event_type,
+        "sentiment": data.sentiment,
+        "sentiment_rationale": data.sentiment_rationale,
+        "primary_llm_importance": data.importance,
+    }
+    try:
+        resp = httpx.post(
+            f"{settings.jev_decision_url}/decide/gated",
+            json={
+                "state": state,
+                "question": "How important/urgent is this news for a markets-focused reader?",
+                "criteria": _JEV_IMPORTANCE_LEVELS,
+            },
+            timeout=8.0,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+    except (httpx.HTTPError, ValueError, KeyError):
+        return None
+
+    jev_choice = result.get("choice")
+    return {
+        "jev_importance": jev_choice,
+        "jev_confidence": result.get("confidence"),
+        "jev_escalate": result.get("escalate"),
+        "agrees_with_llm": jev_choice == data.importance,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Entry point
 # --------------------------------------------------------------------------- #
 def call_llm(
@@ -435,10 +511,18 @@ def call_llm(
     except ValidationError as exc:
         raise EnrichmentError(f"schema validation failed: {exc}") from exc
 
+    jev_check = jev_importance_check(data)
+    if jev_check and not jev_check["agrees_with_llm"] and not jev_check["jev_escalate"]:
+        log.warning(
+            "jev importance disagreement: llm=%s jev=%s confidence=%.2f",
+            data.importance, jev_check["jev_importance"], jev_check["jev_confidence"] or 0.0,
+        )
+
     return EnrichmentResult(
         data=data,
         input_tokens=in_tok,
         output_tokens=out_tok,
         raw=data.model_dump(),
         model=model,
+        jev_check=jev_check,
     )
