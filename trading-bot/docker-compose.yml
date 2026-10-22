@@ -1,0 +1,54 @@
+# Trading bot - freqtrade PAPER TRADING (dry_run) only. Never live.
+# Two paper bots for the A/B test:
+#   freqtrade      = TrendSimple (no Jev)      API http://127.0.0.1:8011
+#   freqtrade-jev  = TrendSimpleJev (Jev gate) API http://127.0.0.1:8012
+x-ft: &ft
+  image: freqtradeorg/freqtrade:stable
+  restart: unless-stopped
+  mem_limit: 768m
+  env_file: .env
+  volumes:
+    - ./user_data:/freqtrade/user_data
+  networks:
+    - default
+    - n8n-stack_default
+
+services:
+  freqtrade:
+    <<: *ft
+    container_name: freqtrade
+    environment:
+      # safety: force paper mode even if someone edits config.json
+      FREQTRADE__DRY_RUN: "true"
+      FREQTRADE__BOT_NAME: "trendsimple-paper"
+      JEV_URL: "http://jev-decision-server:8000"
+    ports:
+      - "127.0.0.1:8011:8080"
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade.log
+      --db-url sqlite:////freqtrade/user_data/tradesv3.dryrun.sqlite
+      --config /freqtrade/user_data/config.json
+      --strategy TrendSimple
+
+  freqtrade-jev:
+    <<: *ft
+    container_name: freqtrade-jev
+    environment:
+      FREQTRADE__DRY_RUN: "true"
+      FREQTRADE__BOT_NAME: "trendsimple-jev-paper"
+      JEV_URL: "http://jev-decision-server:8000"
+      JEV_CACHE: "/freqtrade/user_data/jev_cache_live.json"
+      JEV_MAX_CALLS: "200"
+    ports:
+      - "127.0.0.1:8012:8080"
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade-jev.log
+      --db-url sqlite:////freqtrade/user_data/tradesv3.dryrun-jev.sqlite
+      --config /freqtrade/user_data/config.json
+      --strategy TrendSimpleJev
+
+networks:
+  n8n-stack_default:
+    external: true
