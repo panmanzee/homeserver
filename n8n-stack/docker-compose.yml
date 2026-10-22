@@ -120,7 +120,7 @@ services:
     container_name: homepage
     restart: always
     environment:
-      HOMEPAGE_ALLOWED_HOSTS: pan-homeserver.tail9ee4c5.ts.net:8443,pan-homeserver.tail9ee4c5.ts.net,localhost:8004,127.0.0.1:8004
+      HOMEPAGE_ALLOWED_HOSTS: workhub.tail9ee4c5.ts.net:8443,workhub.tail9ee4c5.ts.net,localhost:8004,127.0.0.1:8004
       PUID: "1000"
       PGID: "1000"
     volumes:
@@ -175,10 +175,48 @@ services:
     ports:
       - "127.0.0.1:8008:5006"
 
+  # SMS-to-budget gateway — receives forwarded Kasikorn SMS Alert messages
+  # from the Android smsgateway app, parses transactions, queues for
+  # Telegram review + Actual Budget import. Only POST /sms is on Tailscale Funnel (:10000), secret required.
+  sms-gateway:
+    build: ./sms-gateway
+    container_name: sms-gateway
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - sms_gateway_data:/data
+    environment:
+      - QUEUE_PATH=/data/queue.jsonl
+    ports:
+      - "127.0.0.1:8500:8500"
+
+  # Bridges the sms-gateway queue into real Actual Budget transactions.
+  # Reads the shared queue volume read-only; only imports parsed_confidently
+  # entries so ambiguous SMS never write a wrong number silently.
+  actual-importer:
+    build: ./actual-importer
+    container_name: actual-importer
+    restart: always
+    depends_on:
+      - actual
+      - sms-gateway
+    environment:
+      ACTUAL_SERVER_URL: http://actual:5006
+      ACTUAL_PASSWORD: ${ACTUAL_PASSWORD:?set ACTUAL_PASSWORD in .env}
+      ACTUAL_SYNC_ID: ${ACTUAL_SYNC_ID:?set ACTUAL_SYNC_ID in .env}
+      ACTUAL_ACCOUNT_NAME: Kasikorn
+      QUEUE_PATH: /queue/queue.jsonl
+      STATE_PATH: /state/cursor.json
+      POLL_SECONDS: "60"
+    volumes:
+      - sms_gateway_data:/queue:ro
+      - actual_importer_state:/state
+
   # AdGuard Home — network-wide DNS ad/tracker blocking.
   # SAFETY: the DNS listener binds ONLY to the Tailscale interface IP
-  # (100.77.47.51). The box's own resolver, /etc/resolv.conf, and the router
-  # are never touched. A device opts in by pointing its DNS at 100.77.47.51
+  # (100.108.65.118). The box's own resolver, /etc/resolv.conf, and the router
+  # are never touched. A device opts in by pointing its DNS at 100.108.65.118
   # (must be on the tailnet) and can revert to automatic at any time.
   # Web UI via `tailscale serve --https=8446`.
   adguard:
@@ -189,8 +227,8 @@ services:
       - adguard_work:/opt/adguardhome/work
       - adguard_conf:/opt/adguardhome/conf
     ports:
-      - "100.77.47.51:53:53/tcp"   # DNS — Tailscale interface ONLY
-      - "100.77.47.51:53:53/udp"
+      - "100.108.65.118:53:53/tcp"   # DNS — Tailscale interface ONLY
+      - "100.108.65.118:53:53/udp"
       - "127.0.0.1:8007:3000"      # admin UI (set web port = 3000 in the setup wizard)
 
   # KanjiDojo — personal kanji study app (github.com/panmanzee/learn-kanji).
@@ -216,5 +254,7 @@ volumes:
   vaultwarden_data:
   uptime_kuma_data:
   actual_data:
+  sms_gateway_data:
+  actual_importer_state:
   adguard_work:
   adguard_conf:

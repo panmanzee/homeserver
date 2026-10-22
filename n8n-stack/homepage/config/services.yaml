@@ -1,7 +1,7 @@
 - Apps:
     - TaskBot:
         icon: mdi-robot-happy
-        href: https://pan-homeserver.tail9ee4c5.ts.net:8448/
+        href: https://workhub.tail9ee4c5.ts.net:8448/
         description: Telegram task & schedule bot (+ Google Calendar)
         server: my-docker
         container: taskbot
@@ -9,7 +9,7 @@
 
     - Newsfeed:
         icon: si-rss
-        href: https://pan-homeserver.tail9ee4c5.ts.net:8450/
+        href: https://workhub.tail9ee4c5.ts.net:8450/
         description: Searchable, filterable news reader — RSS → LLM enrichment
         server: my-docker
         container: newsfeed-api
@@ -17,7 +17,7 @@
 
     - RAG study Q&A:
         icon: mdi-book-search
-        href: https://pan-homeserver.tail9ee4c5.ts.net:8444/
+        href: https://workhub.tail9ee4c5.ts.net:8444/
         description: Ask your own PDFs/notes — cited answers
         server: my-docker
         container: rag-api
@@ -25,7 +25,7 @@
 
     - Vaultwarden:
         icon: si-vaultwarden
-        href: https://pan-homeserver.tail9ee4c5.ts.net/
+        href: https://workhub.tail9ee4c5.ts.net/
         description: Self-hosted password manager
         server: my-docker
         container: vaultwarden
@@ -33,14 +33,14 @@
 
     - Actual Budget:
         icon: mdi-cash-multiple
-        href: https://pan-homeserver.tail9ee4c5.ts.net:8447/
+        href: https://workhub.tail9ee4c5.ts.net:8447/
         description: Self-hosted budgeting
         server: my-docker
         container: actual
 
     - KanjiDojo:
         icon: mdi-translate
-        href: https://pan-homeserver.tail9ee4c5.ts.net:8449/
+        href: https://workhub.tail9ee4c5.ts.net:8449/
         description: Personal kanji study — SRS reviews
         server: my-docker
         container: kanjidojo
@@ -55,21 +55,21 @@
 
     - n8n:
         icon: si-n8n
-        href: http://100.77.47.51:5678/
+        href: http://100.108.65.118:5678/
         description: Workflow / cron orchestrator
         server: my-docker
         container: n8n
 
     - AdGuard Home:
         icon: si-adguard
-        href: https://pan-homeserver.tail9ee4c5.ts.net:8446/
+        href: https://workhub.tail9ee4c5.ts.net:8446/
         description: DNS ad/tracker blocking (tailnet, opt-in per device)
         server: my-docker
         container: adguard
 
     - Uptime Kuma:
         icon: mdi-heart-pulse
-        href: https://pan-homeserver.tail9ee4c5.ts.net:8445/
+        href: https://workhub.tail9ee4c5.ts.net:8445/
         description: Service monitoring + Telegram alerts
         server: my-docker
         container: uptime-kuma
