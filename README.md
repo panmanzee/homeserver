@@ -1,23 +1,23 @@
 <div align="center">
 
-# 🏠 pan-homeserver
+# 🏠 homeserver (workhub)
 
-**A 12-container self-hosted platform on a 2013 mini PC.**
+**A 17-container self-hosted platform on a 2013 mini PC (Proxmox LXC `workhub`).**
 
 Three custom-built application services — an AI news-digest pipeline, a
 conversational Telegram task manager, and a RAG study-Q&A bot — running
 alongside a password vault, uptime monitoring, budgeting, and DNS filtering,
 all behind a single dashboard, orchestrated by n8n, backed by one Postgres
 (with `pgvector`), shipped with Docker Compose, administered entirely over
-SSH with zero ports exposed to the public internet.
+SSH and Tailscale with no inbound ports opened on the router.
 
 ![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Tailscale](https://img.shields.io/badge/Tailscale-only%20access-black?logo=tailscale&logoColor=white)
-![Containers](https://img.shields.io/badge/containers-12-2496ED)
-![Tests](https://img.shields.io/badge/tests-159%20passing-0A9EDC)
+![Containers](https://img.shields.io/badge/containers-17-2496ED)
+![Tests](https://img.shields.io/badge/tests-224-0A9EDC)
 
 </div>
 
@@ -32,6 +32,10 @@ SSH with zero ports exposed to the public internet.
 | **[`newsfeed-api`](n8n-stack/newsfeed-api/)** | RSS → Postgres → LLM (factual summary + tickers/tags) → EOD prices → Telegram digest, plus a searchable/filterable web reader; Tailscale `:8450` |
 | **[`taskbot`](n8n-stack/taskbot/)** | Plain-language Telegram bot + web app → managed task list + opt-in Google Calendar sync + daily plan/review; Tailscale `:8448` |
 | **[`rag-api`](n8n-stack/rag-api/)** | Ask questions about your own PDFs/notes; hybrid retrieval (pgvector + full-text + RRF) + cited answers; Tailscale `:8444` |
+| **[`sms-gateway`](n8n-stack/sms-gateway/)** + **[`actual-importer`](n8n-stack/actual-importer/)** | Bank SMS (forwarded from the phone) → parsed transaction queue → Actual Budget. Only `POST /sms` is on Tailscale Funnel `:10000`, shared secret required |
+| **[`jev-decision-server`](jev-decision-server/)** | Typed yes/no / choice / score decisions via the Jev (TypeSafe) API, used by newsfeed-api and the trading bot; internal Docker network only |
+| **[`discord-bot`](discord-bot/)** | Discord slash-command bot |
+| **[`observability`](observability/)** | Arize Phoenix trace UI for Hermes agent runs; Tailscale `:8451` |
 
 **Deployed & operated** (off-the-shelf images, wired into the same
 compose/backup/Tailscale/dashboard setup):
@@ -49,7 +53,9 @@ compose/backup/Tailscale/dashboard setup):
 
 Everything is reached over **Tailscale only**, via `tailscale serve` — one
 port per service, TLS terminated by Tailscale, nothing bound to the LAN or the
-public internet, no Funnel.
+public internet. Exceptions on Tailscale Funnel: Vaultwarden (`:443`, signups off, admin disabled) and the SMS webhook (`/sms` on `:10000`, secret required).
+
+**Sister project:** [`cloudhost/`](cloudhost/) is the PanDeploy hosting platform (Coolify + portal + billing + VMs) running in a separate LXC; public copy at **[panmanzee/pandeploy](https://github.com/panmanzee/pandeploy)**.
 
 Nightly `scripts/backup.sh` (cron, 03:00) dumps every Postgres database plus
 every service's data volume into one timestamped `~/backups/*.tar.gz`, keeping
@@ -287,10 +293,10 @@ above:
 | LLM | Google Gemini (default) / Anthropic Claude (optional) — structured output & tool-use; `gemini-embedding-001` for RAG embeddings |
 | Integrations | Telegram Bot API · Google Calendar API · Twelve Data |
 | Scheduling | n8n cron workflows (cross-service) · APScheduler (in-process jobs) |
-| Networking | Tailscale mesh VPN — `tailscale serve` per-port HTTPS, zero inbound ports on the router, no Funnel |
+| Networking | Tailscale mesh VPN — `tailscale serve` per-port HTTPS, zero inbound ports on the router; Funnel only for Vaultwarden and the SMS webhook |
 | Delivery | Docker Compose · multi-stage `python:3.12-slim` images · read-only Docker-socket proxy for the dashboard |
 | Backups | Nightly `pg_dumpall` + volume tar, 14-day local retention, optional off-box copy via `rclone` (Backblaze B2) |
-| Tests | pytest — every external (HTTP, LLM, DB) mocked; `respx` for request-level assertions — **159 tests** across the 3 custom services |
+| Tests | pytest — every external (HTTP, LLM, DB) mocked; `respx` for request-level assertions — **224 tests** across newsfeed-api (97), taskbot (89) and rag-api (38) |
 
 ---
 
@@ -344,10 +350,9 @@ python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
 ## 📌 About
 
-Personal infrastructure, built as a portfolio piece and run for real — 12
-containers, 3 of them custom FastAPI services backed by 159 passing tests, the
-rest deployed and operated off-the-shelf apps, all reachable only over a
-Tailscale mesh VPN with nothing exposed to the public internet. The design
+Personal infrastructure, built as a portfolio piece and run for real: 17
+containers, 7 of them my own services (224 tests across the three largest), the
+rest deployed and operated off-the-shelf apps, reached over a Tailscale mesh VPN. The design
 docs under [`docs/superpowers/`](docs/superpowers/) capture the full
 brainstorm → spec → plan → build cycle behind each custom service. Idle
 footprint is ~1.3 GB across the whole stack — the 2013 low-power chip handles
