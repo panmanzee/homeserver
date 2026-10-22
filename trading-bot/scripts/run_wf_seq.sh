@@ -6,7 +6,7 @@ set -e
 cd /home/pan/homeserver/trading-bot
 OUT=/freqtrade/user_data/backtest_results/wf
 mkdir -p user_data/backtest_results/wf
-rm -f user_data/backtest_results/wf/*.jsonl
+[ "$FRESH" = 1 ] && rm -f user_data/backtest_results/wf/*.jsonl
 YEARS="20180401-20190101 20190101-20200101 20200101-20210101 20210101-20220101 20220101-20230101 20230101-20240101 20240101-20250101 20250101-20260101 20260101-20261021"
 
 run() { # label sma brk atr jobs...

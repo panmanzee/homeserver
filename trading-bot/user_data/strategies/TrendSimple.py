@@ -49,6 +49,9 @@ class TrendSimple(IStrategy):
     breakout = _env_int("TS_BREAKOUT", 20)
     sma_exit = _env_int("TS_SMA_EXIT", 50)
     atr_mult = _env_float("TS_ATR_MULT", 3.0)
+    # experiment-only regime filters (default "none" = live behaviour unchanged)
+    regime_filter = os.environ.get("TS_FILTER", "none")   # none | turb | adx
+    turb_q = _env_float("TS_TURB_Q", 0.90)
 
     # --- risk settings ---
     risk_per_trade = 0.01      # 1% of equity lost if the stop is hit
@@ -64,7 +67,7 @@ class TrendSimple(IStrategy):
     use_exit_signal = True
     exit_profit_only = False
     process_only_new_candles = True
-    startup_candle_count = 210
+    startup_candle_count = 210 if regime_filter != "turb" else 252 + 365 + 5
 
     @property
     def protections(self):
@@ -97,6 +100,44 @@ class TrendSimple(IStrategy):
         df["adx"] = ta.ADX(df, timeperiod=14)
         df["stop_dist"] = (self.atr_mult * df["atr"] / df["close"]).clip(
             self.min_stop_dist, self.max_stop_dist)
+        if self.regime_filter == "turb":
+            df = self._add_turbulence(df, metadata)
+        if self.regime_filter == "adx":
+            # OpenBB-style rule regime: trend if ADX>25 and Choppiness(14)<61.8 (textbook values)
+            n = 14
+            tr = ta.TRANGE(df)
+            rng_ = df["high"].rolling(n).max() - df["low"].rolling(n).min()
+            df["chop"] = 100 * np.log10(tr.rolling(n).sum() / rng_) / np.log10(n)
+        return df
+
+    def _add_turbulence(self, df: DataFrame, metadata: dict) -> DataFrame:
+        """FinRL-style turbulence: Mahalanobis distance of today's BTC+ETH daily returns vs
+        the previous 252 days. Threshold = 90% quantile of the PAST 365 turbulence values
+        (rolling, shifted 1) -> no look-ahead. Entry blocked when turb > threshold."""
+        pairs = self.config.get("exchange", {}).get("pair_whitelist", ["BTC/USDT", "ETH/USDT"])
+        rets = {}
+        for p in pairs:
+            o = df if p == metadata["pair"] else self.dp.get_pair_dataframe(p, self.timeframe)
+            if o is None or o.empty:
+                continue
+            rets[p] = o.set_index("date")["close"].pct_change()
+        r = pd.DataFrame(rets).reindex(df["date"]).values
+        win = 252
+        turb = np.full(len(r), np.nan)
+        for i in range(win + 1, len(r)):
+            hist = r[i - win:i]
+            hist = hist[~np.isnan(hist).any(axis=1)]
+            x = r[i]
+            if len(hist) < win // 2 or np.isnan(x).any():
+                continue
+            mu = hist.mean(axis=0)
+            cov = np.cov(hist, rowvar=False)
+            d = x - mu
+            turb[i] = float(d @ np.linalg.pinv(np.atleast_2d(cov)) @ d)
+        s = pd.Series(turb, index=df.index)
+        df["turb"] = s
+        # rolling 365-day window so the value does not depend on how much history is loaded
+        df["turb_thr"] = s.rolling(365, min_periods=365).quantile(self.turb_q).shift(1)
         return df
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
@@ -105,6 +146,11 @@ class TrendSimple(IStrategy):
             & (dataframe["close"] > dataframe["hh"])
             & (dataframe["volume"] > 0)
         )
+        if self.regime_filter == "turb":
+            cond &= dataframe["turb"].notna() & dataframe["turb_thr"].notna() & (
+                dataframe["turb"] <= dataframe["turb_thr"])
+        elif self.regime_filter == "adx":
+            cond &= (dataframe["adx"] > 25) & (dataframe["chop"] < 61.8)
         dataframe.loc[cond, ["enter_long", "enter_tag"]] = (1, "breakout")
         return dataframe
 

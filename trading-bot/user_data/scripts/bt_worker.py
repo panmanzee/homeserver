@@ -24,8 +24,21 @@ KEEP = ["total_trades", "profit_total", "profit_total_abs", "cagr", "sharpe", "s
         "holding_avg_s", "market_change", "starting_balance", "final_balance",
         "backtest_start", "backtest_end", "backtest_days", "profit_factor", "expectancy_ratio"]
 
+import os
+done_keys = set()
+if os.path.exists(out):  # resume: skip jobs already in the file
+    for line in open(out):
+        try:
+            r = json.loads(line)
+            done_keys.add((r["timerange"], float(r["fee"])))
+        except Exception:
+            pass
+
 for job in sys.argv[4:]:
     timerange, fee = job.split(":")
+    if (timerange, float(fee)) in done_keys:
+        print(f"done {label} {timerange} fee={fee} (cached)", flush=True)
+        continue
     args = {
         "config": ["/freqtrade/user_data/config.json"],
         "user_data_dir": "/freqtrade/user_data",

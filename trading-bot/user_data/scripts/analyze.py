@@ -125,6 +125,21 @@ def random_entry(rec, fee, n_sims=1000):
             "n_sims": n_sims, "n_trades": len(fr), "mean_hold_days": float(hold.mean())}
 
 
+def mc_drawdown(rec, n_sims=2000):
+    """Shuffle the order of closed-trade P&L (abs USDT). Max drawdown of the closed-trade
+    equity curve for each order. Report actual, median and 95th percentile."""
+    pnl = np.array([t["profit_abs"] for t in rec["trades"]], dtype=float)
+    if len(pnl) == 0:
+        return {}
+
+    def mdd(p):
+        eq = START_BAL + np.concatenate([[0.0], np.cumsum(p)])
+        return float(-(eq / np.maximum.accumulate(eq) - 1).min())
+    sims = np.array([mdd(rng.permutation(pnl)) for _ in range(n_sims)])
+    return {"actual": mdd(pnl), "median": float(np.median(sims)),
+            "p95": float(np.percentile(sims, 95)), "worst": float(sims.max()), "n_trades": len(pnl)}
+
+
 def main():
     runs = {}
     for fn in glob.glob(f"{D}/*.jsonl"):
@@ -181,6 +196,29 @@ def main():
                    "default_return": yr.get("default", {}).get(y)})
     out["walkforward"]["0.0025"] = wf
     out["grid_yearly_0.0025"] = yr
+    # --- Monte Carlo trade-order shuffle (idea from jesse): how bad can drawdown get by luck of order
+    for fee in (0.001, 0.0025):
+        rec = runs.get(("default", FULL, fee))
+        if rec:
+            out.setdefault("mc_dd", {})[str(fee)] = mc_drawdown(rec)
+    # --- E2 regime filters (no LLM): f_none / f_turb / f_adx on 2020+ windows
+    FULL2 = "20200101-20261021"
+    filt = {}
+    for lab in ("f_none", "f_turb", "f_adx"):
+        for fee in (0.001, 0.0025):
+            rec = runs.get((lab, FULL2, fee))
+            if not rec:
+                continue
+            m = summarize(rec)
+            m["random"] = random_entry(rec, fee)
+            m["mc_dd"] = mc_drawdown(rec)
+            m["years"] = {k[1]: runs[k]["profit_total"] for k in runs
+                          if k[0] == lab and k[2] == fee and k[1] != FULL2}
+            filt[f"{lab}@{fee}"] = m
+    if filt:
+        bh = curve_metrics(bh_equity(FULL2, 0.0025))
+        filt["bh_btc@0.0025"] = bh
+        out["filters"] = filt
     json.dump(out, open(f"{D}/summary.json", "w"), indent=1, default=str)
     print(json.dumps(out, indent=1, default=str)[:20000])
 
