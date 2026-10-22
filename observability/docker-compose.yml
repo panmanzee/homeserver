@@ -1,0 +1,18 @@
+# Arize Phoenix: trace UI for Hermes agent runs (hermes_otel plugin).
+# Bound to localhost; reached over Tailscale only:
+#   tailscale serve --bg --https=8451 http://127.0.0.1:8010
+#   UI + OTLP: https://workhub.tail9ee4c5.ts.net:8451  (traces: /v1/traces)
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: phoenix
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8010:6006"
+    environment:
+      - PHOENIX_WORKING_DIR=/mnt/data
+    volumes:
+      - phoenix-data:/mnt/data
+    mem_limit: 1g
+volumes:
+  phoenix-data:
