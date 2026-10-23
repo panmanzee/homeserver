@@ -70,8 +70,18 @@ class TrendSimple(IStrategy):
     process_only_new_candles = True
     startup_candle_count = (210 if regime_filter != "turb" else 252 + 365 + 5) * _K
 
+    # TS_PROT=light (v2 full-size bot): drop the two MaxDrawdown locks. They were sized for 1% risk;
+    # at full size one normal losing trade trips the 15% lock and it re-fires for a year (reviewer 2026-10-23).
+    prot_mode = os.environ.get("TS_PROT", "full")
+
     @property
     def protections(self):
+        if self.prot_mode == "light":
+            return [
+                {"method": "CooldownPeriod", "stop_duration_candles": 2 * self._K},
+                {"method": "StoplossGuard", "lookback_period_candles": 30 * self._K, "trade_limit": 3,
+                 "stop_duration_candles": 7 * self._K, "only_per_pair": False},
+            ]
         return [
             # pause 2 candles after a trade closes on a pair
             {"method": "CooldownPeriod", "stop_duration_candles": 2 * self._K},

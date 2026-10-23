@@ -73,7 +73,7 @@ services:
       --strategy TrendSimple
 
   # bot D (v2, 2026-10-23): TrendSimple daily rules, BTC/USDT only, FULL position (risk 1 -> stake capped 99%).
-  # Backtest 2018-04..2026-10 fee 0.15%: +672%, max underwater 28.6%, BTC hold +1099% / -77%. Design: Designs/2026-10-23-trading-bot-btc-focus.md
+  # Backtest 2018-04..2026-10 fee 0.15%, --enable-protections, TS_PROT=light: +672%, DD 34% (mark-to-market). BTC hold ~+1111% / -77%. BORDERLINE vs gate. Design: Designs/2026-10-23-trading-bot-btc-focus.md
   freqtrade-btc:
     <<: *ft
     container_name: freqtrade-btc
@@ -83,6 +83,7 @@ services:
       TS_TF: "1d"
       TS_RISK: "1"
       TS_MAX_STAKE: "0.99"
+      TS_PROT: "light"
     ports:
       - "127.0.0.1:8014:8080"
     command: >
