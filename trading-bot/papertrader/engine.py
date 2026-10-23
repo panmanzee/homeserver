@@ -28,6 +28,7 @@ import core
 BOT = os.environ.get("BOT", "stocks")
 STRATEGY = os.environ.get("STRATEGY", "")
 START_CASH = float(os.environ.get("START_CASH", "3000"))
+GATE = os.environ.get("GATE", "")   # e.g. "FAILED gate - test only"; printed in reports
 STATE = os.environ.get("STATE_DIR", "/app/state")
 RUN_AT = os.environ.get("RUN_AT", "08:00")
 BKK = ZoneInfo("Asia/Bangkok")
@@ -64,6 +65,8 @@ def db():
     con = sqlite3.connect(f"{STATE}/{BOT}.sqlite")
     con.execute("CREATE TABLE IF NOT EXISTS decisions (bar_date TEXT PRIMARY KEY, strategy TEXT, "
                 "weights TEXT, decided_at TEXT, note TEXT)")
+    con.execute("CREATE TABLE IF NOT EXISTS equity (bar_date TEXT PRIMARY KEY, equity REAL, recorded_at TEXT)")
+    con.execute("CREATE TABLE IF NOT EXISTS skips (bar_date TEXT, reason TEXT, at TEXT)")
     return con
 
 
@@ -117,11 +120,16 @@ def run_once():
         last_r = core.panel(data, NAMES, "Close").pct_change().iloc[-1].abs().max()
         if last_r > SPIKE:
             log(f"bar {bar.date()} moved {last_r:.1%} > {SPIKE:.0%}: possible bad tick, wait for next bar")
+            con.execute("INSERT INTO skips VALUES (?,?,?)", (str(bar.date()), f"spike {last_r:.1%}",
+                        datetime.now(BKK).isoformat(timespec="minutes")))
+            con.commit()
         else:
             w = STRATS[STRATEGY](data, idx).iloc[-1]
             con.execute("INSERT INTO decisions VALUES (?,?,?,?,?)",
                         (str(bar.date()), STRATEGY, json.dumps({k: float(w[k]) for k in NAMES}),
-                         datetime.now(BKK).isoformat(timespec="minutes"), ""))
+                         datetime.now(BKK).isoformat(timespec="minutes"),
+                         json.dumps({"closes": {k: float(data[k]["Close"].iloc[-1]) for k in NAMES},
+                                     "bars": {k: str(data[k].index[-1].date()) for k in NAMES}})))
             con.commit()
             log("decided on bar", bar.date(), {k: round(float(w[k]), 3) for k in NAMES})
     con.close()
@@ -133,6 +141,14 @@ def status(data, idx):
     out = {"bot": BOT, "strategy": STRATEGY, "start_cash": START_CASH, "updated": datetime.now(BKK).isoformat(timespec="minutes"),
            "last_bar": str(idx[-1].date())}
     if w is not None:
+        start = w.index[0]
+        missing = [str(d.date()) for d in w.index if d not in idx]
+        if missing:
+            log("WARNING journal dates not in data (Yahoo revision?):", missing)
+            out["warning"] = f"journal dates not in data: {missing}"
+        pos = (idx.searchsorted(w.index, side="right") - 1).clip(0)
+        w = w.set_axis(idx[pos])
+        w = w[~w.index.duplicated(keep="last")]
         start = w.index[0]
         full = w.reindex(idx[idx >= start]).ffill().fillna(0.0)
         res = core.simulate(full, data, core.COST[BOT])
@@ -146,6 +162,16 @@ def status(data, idx):
             "target_next_open": {k: round(float(v), 3) for k, v in full.iloc[-1].items()},
             "decisions": int(len(w)), "trades": int((res["turnover"] > 1e-9).sum()),
         })
+        con = db()
+        for d, v in eq.items():
+            con.execute("INSERT OR IGNORE INTO equity VALUES (?,?,?)",
+                        (str(d.date()), float(v), datetime.now(BKK).isoformat(timespec="minutes")))
+        con.commit()
+        first = con.execute("SELECT equity FROM equity WHERE bar_date=?", (str(eq.index[-1].date()),)).fetchone()
+        con.close()
+        if first and abs(first[0] - float(eq.iloc[-1])) > 0.01:
+            out["warning"] = (out.get("warning", "") + f" equity for {eq.index[-1].date()} first recorded "
+                              f"{first[0]:.2f}, now {float(eq.iloc[-1]):.2f} (data revised)").strip()
         if BENCH:
             c = data[BENCH]["Close"].reindex(full.index).ffill()
             o = data[BENCH]["Open"].reindex(full.index).ffill()
@@ -165,7 +191,9 @@ def report():
         print(f"## {BOT}: no status yet\n%% TG: {BOT}: no status yet %%")
         return
     name = {"stocks": "Stocks bot (SPY/QQQ)", "forex": "Forex bot (4 majors + gold)"}[BOT]
-    print(f"## {name} - paper, strategy {s['strategy']}")
+    print(f"## {name} - paper, strategy {s['strategy']}" + (f" ({GATE})" if GATE else ""))
+    if s.get("warning"):
+        print(f"- ⚠️ {s['warning']}")
     if "equity" not in s:
         print("No decision yet.\n%% TG: " + f"{BOT}: no decision yet %%")
         return
@@ -175,7 +203,7 @@ def report():
     held = ", ".join(f"{k} {v:+.2f}" for k, v in s["held_now"].items() if abs(v) > 1e-6) or "cash"
     tgt = ", ".join(f"{k} {v:+.2f}" for k, v in s["target_next_open"].items() if abs(v) > 1e-6) or "cash"
     print(f"- Holding now: {held}. Target for next open: {tgt}. Last bar {s['last_bar']}, updated {s['updated']}")
-    tg = f"{BOT} {s['return_pct']:+.2f}% ({held})"
+    tg = f"{BOT}{' [test only]' if GATE else ''} {s['return_pct']:+.2f}% ({held})"
     if s.get("bench"):
         tg += f" vs {BENCH} {s['bench']['return_pct']:+.2f}%"
     print(f"%% TG: {tg} %%")
@@ -183,11 +211,18 @@ def report():
 
 def loop():
     hh, mm = map(int, RUN_AT.split(":"))
+    first = os.environ.get("RUN_NOW", "0") == "1"
     while True:
-        try:
-            run_once()
-        except Exception as e:  # keep the service alive; next run retries
-            log("ERROR", repr(e))
+        if first:
+            for attempt in range(4):
+                try:
+                    run_once()
+                    break
+                except Exception as e:  # keep the service alive
+                    log("ERROR", f"attempt {attempt + 1}:", repr(e))
+                    if attempt < 3:
+                        time.sleep(3600)
+        first = True
         now = datetime.now(BKK)
         nxt = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
         if nxt <= now:

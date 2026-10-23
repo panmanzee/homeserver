@@ -19,21 +19,31 @@ COST = {"stocks": 0.0005, "forex": 0.0003}   # per side, fraction of traded noti
 
 
 # ------------------------------------------------------------------ data
-def clean(df, spike=0.06, revert=0.01):
-    """Fix known Yahoo problems.
-    1) one-day spikes that revert the next day (e.g. EURUSD/USDJPY 2008-12-08 +17%): if
-       |r_t| > spike and |r_t + r_t+1| < revert -> that day's OHLC set to NaN, then forward-filled.
-       NOTE: uses day t+1 to detect a bad tick on day t. This is data repair of the HISTORY file,
-       and the live engine only ever acts on the latest bar, so a bad latest bar is caught by the
-       live sanity check (refuse to trade on a >spike move until the next bar confirms it).
+SPIKE = {"stocks": 0.12, "forex": 0.06}   # data-repair threshold per market (see clean)
+
+
+def market_of(name):
+    return "stocks" if name in STOCKS + STOCK_EXTRA else "forex"
+
+
+def clean(df, spike=0.06, back=0.7):
+    """Fix known Yahoo problems (DATA REPAIR, not a strategy rule).
+    1) one-day bad prints: |r_t| > spike AND the next day moves back the other way by at least
+       `back` (70%) of it -> day t's OHLC set to NaN, then forward-filled.
+       v2 (2026-10-23, after review): v1 required the next day to undo the move within 1%, which missed
+       EURUSD/USDJPY 2008-12-08 (+17%, then -13..-15%). Stocks use spike 12% so real crash days
+       (QQQ 2020-03-12, -9%) are kept.
+       NOTE: uses day t+1 to judge day t. That repairs HISTORY only; the live engine guards the
+       newest bar separately (it waits a day on a move bigger than the spike).
     2) OHLC consistency: High = max(O,H,L,C), Low = min(O,H,L,C) (gold futures rows).
     3) Open missing/zero -> previous close.
-    """
+    Returns (df, list of repaired dates)."""
     df = df.copy().sort_index()
     df = df[~df.index.duplicated(keep="last")]
     c = df["Close"]
     r = c.pct_change()
-    bad = (r.abs() > spike) & ((r + r.shift(-1)).abs() < revert)
+    nxt = r.shift(-1)
+    bad = (r.abs() > spike) & (np.sign(nxt) == -np.sign(r)) & (nxt.abs() >= back * r.abs() / (1 + r.abs()))
     df.loc[bad, ["Open", "High", "Low", "Close"]] = np.nan
     df = df.ffill()
     o = df["Open"].where(df["Open"] > 0, df["Close"].shift(1))
@@ -41,17 +51,20 @@ def clean(df, spike=0.06, revert=0.01):
     hi = df[["Open", "High", "Low", "Close"]].max(axis=1)
     lo = df[["Open", "High", "Low", "Close"]].min(axis=1)
     df["High"], df["Low"] = hi, lo
-    return df, int(bad.sum())
+    return df, [str(d.date()) for d in df.index[bad.reindex(df.index, fill_value=False).values]]
 
 
-def load(path_dir, names):
+def load(path_dir, names, until=None):
+    """until: drop bars dated on/after this day (use to cut an unfinished bar in research)."""
     out, fixes = {}, {}
     for n in names:
         d = pd.read_csv(f"{path_dir}/{n}.csv", parse_dates=["date"], index_col="date")
         if d.index.tz is not None:
             d.index = d.index.tz_localize(None)
         d.index = d.index.normalize()
-        out[n], fixes[n] = clean(d)
+        if until is not None:
+            d = d[d.index < pd.Timestamp(until)]
+        out[n], fixes[n] = clean(d, SPIKE[market_of(n)])
     return out, fixes
 
 

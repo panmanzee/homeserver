@@ -14,6 +14,7 @@ import core
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 N_SHUF, N_LA, SEED = 1000, 150, 42
+UNTIL = os.environ.get("UNTIL", "2026-10-23")   # bars dated on/after this are unfinished at research time -> dropped
 
 
 def window_weights(w, start):
@@ -100,6 +101,24 @@ def lookahead(f, data, names, idx, wfull, start, rng):
     return {"dates_checked": len(ts), "mismatches": len(bad), "mismatch_dates": bad[:10]}
 
 
+def next_session(name):
+    """Live calendar for TODAY's signal only (same functions as engine.py). History stays data-based."""
+    if name == "stocks":
+        import exchange_calendars as xc
+        cal = xc.get_calendar("XNYS")
+        return lambda d: cal.date_to_session(pd.Timestamp(d.date()), direction="next").tz_localize(None)             if not cal.is_session(pd.Timestamp(d.date())) else cal.next_session(pd.Timestamp(d.date())).tz_localize(None)
+    return lambda d: pd.Timestamp(d.date()) + pd.offsets.BDay(1)
+
+
+def today_live(f, data, idx, name):
+    core.NEXT_SESSION = next_session(name)
+    try:
+        w = f(data, idx).iloc[-1]
+    finally:
+        core.NEXT_SESSION = None
+    return {c: round(float(v), 4) for c, v in w.items()}
+
+
 def market(name, data, names, strats, cost, start, starts_extra, per_column, gate):
     idx = core.panel(data, names, "Close").index
     rng = np.random.default_rng(SEED)
@@ -113,7 +132,9 @@ def market(name, data, names, strats, cost, start, starts_extra, per_column, gat
     for k, w in W.items():
         res, st = run(w, data, cost, start)
         e = {"stats": st, "years": year_table(res, start), "year_dd": year_dd(res, start),
-             "today": {c: round(float(v), 4) for c, v in w.iloc[-1].items()}, "last_bar": str(idx[-1].date())}
+             "today_research_flag": {c: round(float(v), 4) for c, v in w.iloc[-1].items()},
+             "today": today_live(strats[k], data, idx, name), "last_bar": str(idx[-1].date()),
+             "next_session": str(next_session(name)(idx[-1]).date())}
         if not k.startswith("S0"):
             print("luck", k, flush=True)
             e["luck"] = luck(w, data, cost, start, per_column, rng)
@@ -164,8 +185,8 @@ def fx_gate(out):
 
 
 def main():
-    data, fixes = core.load("data", core.STOCKS + core.STOCK_EXTRA + core.FX)
-    print("bad-tick fixes:", fixes, "total", sum(fixes.values()))
+    data, fixes = core.load("data", core.STOCKS + core.STOCK_EXTRA + core.FX, until=UNTIL)
+    print("bad-tick fixes:", fixes, "total", sum(len(v) for v in fixes.values()))
     R = {"bad_tick_fixes": fixes, "costs": core.COST, "n_shuffles": N_SHUF, "seed": SEED}
     R["stocks"] = market("stocks", data, core.STOCKS, core.STOCK_STRATS, core.COST["stocks"], "2005-01-01",
                          ["2001-01-01", "2008-01-01", "2010-01-01", "2015-01-01"], False, stock_gate)
@@ -185,6 +206,8 @@ def main():
             if "gate" in e:
                 line += " gate " + str({a: (round(b, 3) if isinstance(b, float) else b) for a, b in e["gate"].items() if a != "sens"})
             print(line)
+            if "today" in e:
+                print("   today (live calendar, next", e["next_session"], "):", e["today"], "| data-flag version:", e["today_research_flag"])
 
 
 if __name__ == "__main__":
