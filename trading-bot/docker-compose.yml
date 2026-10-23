@@ -93,6 +93,37 @@ services:
       --config /freqtrade/user_data/config_th.json
       --strategy TrendSimple
 
+  # Stocks + forex PAPER bots (no broker, no keys). Own engine: papertrader/ (freqtrade is crypto-only).
+  # Picks from Projects/trading-bot/stocks-report.md + forex-report.md: both FAILED their gates (near-miss) -> test only.
+  papertrader-stocks:
+    build: ./papertrader
+    image: papertrader:latest
+    container_name: papertrader-stocks
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      BOT: "stocks"
+      STRATEGY: "S3 dual momentum"
+      START_CASH: "3000"
+      RUN_AT: "08:00"
+      TZ: "Asia/Bangkok"
+    volumes:
+      - ./papertrader/state:/app/state
+  papertrader-forex:
+    image: papertrader:latest
+    container_name: papertrader-forex
+    restart: unless-stopped
+    mem_limit: 512m
+    depends_on: [papertrader-stocks]
+    environment:
+      BOT: "forex"
+      STRATEGY: "F3 12m momentum risk-sized"
+      START_CASH: "3000"
+      RUN_AT: "08:05"
+      TZ: "Asia/Bangkok"
+    volumes:
+      - ./papertrader/state:/app/state
+
 networks:
   n8n-stack_default:
     external: true

@@ -8,3 +8,6 @@ user_data/*.sqlite*
 user_data/jev_cache*.json
 results/raw/
 __pycache__/
+papertrader/data/
+papertrader/state/
+papertrader/results/
