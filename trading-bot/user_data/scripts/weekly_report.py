@@ -12,10 +12,12 @@ import urllib.request
 from datetime import datetime, timezone
 
 UD = "/freqtrade/user_data"
-START_BAL = 3000.0
-PAPER_START = "2026-10-23"          # v2 bot D (BTC only, full size) started 2026-10-23 09:36 UTC
+START_BAL = 100000.0                # THB
+PAPER_START = "2026-10-23"          # bot D on Binance TH BTC/THB since 2026-10-23 11:30 UTC
 BTC_AT_START = None                 # filled from Binance daily kline of PAPER_START
-BOTS = {"D BTC trend, full size (v2)": f"{UD}/tradesv3.dryrun-btc.sqlite"}
+BOTS = {"D BTC/THB trend, Binance TH": f"{UD}/tradesv3.dryrun-th.sqlite"}
+API = "https://api.binance.th/api/v1"
+SYM = "BTCTHB"
 # old A/B/C (BTC+ETH, 1% risk) stopped 2026-10-23 with 0 trades; DBs kept for history.
 
 
@@ -26,7 +28,7 @@ def get_json(url):
 
 def price(pair):
     try:
-        return float(get_json(f"https://api.binance.com/api/v3/ticker/price?symbol={pair.replace('/', '')}")["price"])
+        return float(get_json(f"{API}/ticker/price?symbol={pair.replace('/', '')}")["price"])
     except Exception:
         return None
 
@@ -34,7 +36,7 @@ def price(pair):
 def btc_open_on(day):
     try:
         ts = int(datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp() * 1000)
-        k = get_json(f"https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&startTime={ts}&limit=1")
+        k = get_json(f"{API}/klines?symbol={SYM}&interval=1d&startTime={ts}&limit=1")
         return float(k[0][1])
     except Exception:
         return None
@@ -63,7 +65,7 @@ def bot_stats(db):
 def signal_now():
     """Plain-words state of the strategy rules on the last closed daily candle."""
     try:
-        k = get_json("https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=230")[:-1]
+        k = get_json(f"{API}/klines?symbol={SYM}&interval=1d&limit=230")[:-1]
         cl = [float(x[4]) for x in k]; hi = [float(x[2]) for x in k]
         sma100 = sum(cl[-100:]) / 100; sma50 = sum(cl[-50:]) / 50; hh = max(hi[-21:-1])
         return (f"BTC close {cl[-1]:,.0f} | 100-day avg {sma100:,.0f} ({'above' if cl[-1] > sma100 else 'below'}) | "
@@ -74,12 +76,12 @@ def signal_now():
 
 def main():
     now = datetime.now(timezone.utc)
-    btc_now, btc_start = price("BTC/USDT"), btc_open_on(PAPER_START)
+    btc_now, btc_start = price("BTC/THB"), btc_open_on(PAPER_START)
     bh = (btc_now / btc_start - 1) * 100 if btc_now and btc_start else None
     out = [f"---\ntype: report\nproject: trading-bot\ndate: {now:%Y-%m-%d}\n---",
            f"# Paper trading weekly report - {now:%Y-%m-%d}", "",
-           f"Paper since {PAPER_START}. Fake money {START_BAL:.0f} USDT per bot. Dry-run only.", "",
-           "| Bot | Equity USDT | Return % | Closed | Open | Wins |", "|---|---|---|---|---|---|"]
+           f"Paper since {PAPER_START}. Fake money {START_BAL:,.0f} THB. Prices: Binance TH BTC/THB. Dry-run only.", "",
+           "| Bot | Equity THB | Return % | Closed | Open | Wins |", "|---|---|---|---|---|---|"]
     stats = {}
     for name, db in BOTS.items():
         try:
@@ -103,8 +105,8 @@ def main():
             "- Buy rule: close above 100-day avg AND above 20-day high. Sell: close under 50-day avg or trailing stop (3x ATR).",
             "", "## Gate check (needs 4+ weeks of paper)",
             "- keeps >= 60% of BTC hold return with <= half its drop; worst drop <= 40%; no crash / missed stop."]
-    d = stats.get("D BTC trend, full size (v2)")
-    tg = (f"BTC bot weekly: equity {d['equity']:.0f} USDT ({d['return_pct']:+.1f}%), open {d['trades_open']}, "
+    d = stats.get("D BTC/THB trend, Binance TH")
+    tg = (f"BTC bot weekly: equity {d['equity']:,.0f} THB ({d['return_pct']:+.1f}%), open {d['trades_open']}, "
           f"closed {d['trades_closed']}" if d else "BTC bot weekly: stats error") + (f" | BTC hold {bh:+.1f}%" if bh is not None else "")
     out.append(f"\n%% TG: {tg} %%")
     print("\n".join(out))

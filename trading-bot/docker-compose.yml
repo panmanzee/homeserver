@@ -72,14 +72,14 @@ services:
       --config /freqtrade/user_data/config.json
       --strategy TrendSimple
 
-  # bot D (v2, 2026-10-23): TrendSimple daily rules, BTC/USDT only, FULL position (risk 1 -> stake capped 99%).
+  # bot D (v2, 2026-10-23): Binance TH prices, BTC/THB, 100000 THB fake. TrendSimple daily rules, FULL position (risk 1 -> stake capped 99%).
   # Backtest 2018-04..2026-10 fee 0.15%, --enable-protections, TS_PROT=light: +672%, DD 34% (mark-to-market). BTC hold ~+1111% / -77%. BORDERLINE vs gate. Design: Designs/2026-10-23-trading-bot-btc-focus.md
   freqtrade-btc:
     <<: *ft
     container_name: freqtrade-btc
     environment:
       FREQTRADE__DRY_RUN: "true"
-      FREQTRADE__BOT_NAME: "btc-trend-full-paper"
+      FREQTRADE__BOT_NAME: "btc-thb-trend-paper"
       TS_TF: "1d"
       TS_RISK: "1"
       TS_MAX_STAKE: "0.99"
@@ -89,8 +89,8 @@ services:
     command: >
       trade
       --logfile /freqtrade/user_data/logs/freqtrade-btc.log
-      --db-url sqlite:////freqtrade/user_data/tradesv3.dryrun-btc.sqlite
-      --config /freqtrade/user_data/config_btc.json
+      --db-url sqlite:////freqtrade/user_data/tradesv3.dryrun-th.sqlite
+      --config /freqtrade/user_data/config_th.json
       --strategy TrendSimple
 
 networks:
