@@ -57,7 +57,7 @@ ls -1t "$BACKUP_DIR"/homelab-*.tar.gz 2>/dev/null | tail -n +"$((KEEP + 1))" | w
 done
 
 # 5. Off-box copy via rclone (skipped cleanly if not configured).
-RCLONE="docker run --rm -v $HOME/.config/rclone:/config/rclone:ro -v $BACKUP_DIR:/data:ro rclone/rclone"
+RCLONE="docker run --rm --user $(id -u):$(id -g) -v $HOME/.config/rclone:/config/rclone -v $BACKUP_DIR:/data:ro rclone/rclone"
 if [ ! -f "$HOME/.config/rclone/rclone.conf" ]; then
     echo "$(date -Is)  off-box copy skipped — no ~/.config/rclone/rclone.conf (see script header)"
 elif ! $RCLONE listremotes 2>/dev/null | grep -qx "${RCLONE_REMOTE}:"; then
