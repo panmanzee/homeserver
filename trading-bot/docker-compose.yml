@@ -1,5 +1,6 @@
 # Trading bot - freqtrade PAPER TRADING (dry_run) only. Never live.
-# Two paper bots for the A/B test:
+# v2 (2026-10-23): ONE bot, BTC/USDT only = freqtrade-btc. Old A/B/C kept under profile 'old' (stopped).
+# Old bots:
 #   freqtrade      = TrendSimple (no Jev)      API http://127.0.0.1:8011
 #   freqtrade-jev  = TrendSimpleJev (Jev gate) API http://127.0.0.1:8012
 #   freqtrade-4h   = TrendSimple on 4h candles API http://127.0.0.1:8013
@@ -17,6 +18,7 @@ x-ft: &ft
 services:
   freqtrade:
     <<: *ft
+    profiles: ["old"]
     container_name: freqtrade
     environment:
       # safety: force paper mode even if someone edits config.json
@@ -34,6 +36,7 @@ services:
 
   freqtrade-jev:
     <<: *ft
+    profiles: ["old"]
     container_name: freqtrade-jev
     environment:
       FREQTRADE__DRY_RUN: "true"
@@ -53,6 +56,7 @@ services:
   # bot C (added 2026-10-23): same TrendSimple rules on 4h candles (experiment E5 candidate)
   freqtrade-4h:
     <<: *ft
+    profiles: ["old"]
     container_name: freqtrade-4h
     environment:
       FREQTRADE__DRY_RUN: "true"
@@ -66,6 +70,26 @@ services:
       --logfile /freqtrade/user_data/logs/freqtrade-4h.log
       --db-url sqlite:////freqtrade/user_data/tradesv3.dryrun-4h.sqlite
       --config /freqtrade/user_data/config.json
+      --strategy TrendSimple
+
+  # bot D (v2, 2026-10-23): TrendSimple daily rules, BTC/USDT only, FULL position (risk 1 -> stake capped 99%).
+  # Backtest 2018-04..2026-10 fee 0.15%: +672%, max underwater 28.6%, BTC hold +1099% / -77%. Design: Designs/2026-10-23-trading-bot-btc-focus.md
+  freqtrade-btc:
+    <<: *ft
+    container_name: freqtrade-btc
+    environment:
+      FREQTRADE__DRY_RUN: "true"
+      FREQTRADE__BOT_NAME: "btc-trend-full-paper"
+      TS_TF: "1d"
+      TS_RISK: "1"
+      TS_MAX_STAKE: "0.99"
+    ports:
+      - "127.0.0.1:8014:8080"
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade-btc.log
+      --db-url sqlite:////freqtrade/user_data/tradesv3.dryrun-btc.sqlite
+      --config /freqtrade/user_data/config_btc.json
       --strategy TrendSimple
 
 networks:
