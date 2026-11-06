@@ -47,41 +47,13 @@ services:
       TWELVEDATA_API_KEY: ${TWELVEDATA_API_KEY:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
-      DIGEST_MAX_ITEMS: ${DIGEST_MAX_ITEMS:-12}
-      DIGEST_BULLETS_PER_ITEM: ${DIGEST_BULLETS_PER_ITEM:-2}
+      DIGEST_MAX_ITEMS: ${DIGEST_MAX_ITEMS:-400}
     ports:
       - "127.0.0.1:8001:8000"   # web frontend + manual curl; reached via tailscale serve --https=8450
     depends_on:
       - postgres
 
-  taskbot:
-    build: ./taskbot
-    container_name: taskbot
-    restart: always
-    environment:
-      DATABASE_URL: postgresql://n8n:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/taskbot
-      SERVICE_API_KEY: ${SERVICE_API_KEY:?set SERVICE_API_KEY in .env}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
-      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      # taskbot gets its own model knob: a per-message chat workload wants the
-      # high free-tier RPD of a flash-lite model, independent of newsfeed's GEMINI_MODEL.
-      GEMINI_MODEL: ${TASKBOT_GEMINI_MODEL:-gemini-3.1-flash-lite}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-haiku-4-5}
-      TASKBOT_TZ: ${TASKBOT_TZ:-UTC}
-      TASKBOT_MORNING_TIME: ${TASKBOT_MORNING_TIME:-07:30}
-      TASKBOT_EVENING_TIME: ${TASKBOT_EVENING_TIME:-21:00}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REFRESH_TOKEN: ${GOOGLE_REFRESH_TOKEN:-}
-      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-}
-    ports:
-      - "127.0.0.1:8002:8000"
-    depends_on:
-      - postgres
-
+  # taskbot removed 2026-11-07 (no longer used); code kept in ./taskbot, DB "taskbot" kept in postgres
   vaultwarden:
     image: vaultwarden/server:1.37.2
     container_name: vaultwarden

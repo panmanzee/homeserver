@@ -215,22 +215,24 @@ def notify_urgent() -> dict[str, Any]:
 
 @app.post("/notify/digest", dependencies=[AuthDep])
 def notify_digest() -> dict[str, Any]:
-    """Send one compact digest of everything not yet pushed. Run on a schedule."""
-    items = db.select_unnotified(limit=settings.digest_max_items * 4)
+    """Send the daily topic list (headlines only + web link). Run once a day."""
+    # every headline counts, even ones the LLM has not summarised yet
+    items = db.select_unnotified(limit=settings.digest_max_items, enriched_only=False)
     if not items:
         return {"messages": 0, "items": 0}
 
+    from zoneinfo import ZoneInfo
+
+    today = datetime.now(ZoneInfo(settings.digest_tz)).strftime("%a %d %b")
     messages = notify.format_digest(
-        items,
-        max_items=settings.digest_max_items,
-        max_bullets=settings.digest_bullets_per_item,
+        items, web_url=settings.newsfeed_web_url, date_label=today
     )
     try:
         sent = notify.send_all(messages)
     except notify.TelegramError as exc:
         raise HTTPException(status_code=502, detail=f"telegram send failed: {exc}")
 
-    marked = db.mark_notified([i["id"] for i in items[: settings.digest_max_items]])
+    marked = db.mark_notified([i["id"] for i in items])
     return {"messages": sent, "items": marked}
 
 

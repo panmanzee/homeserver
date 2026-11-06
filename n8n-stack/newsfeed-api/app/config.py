@@ -41,7 +41,9 @@ class Settings(BaseSettings):
     # Telegram delivery
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
-    digest_max_items: int = 12
+    digest_max_items: int = 400  # daily topic list: send every new headline
+    newsfeed_web_url: str = "https://workhub.tail9ee4c5.ts.net:8450/"
+    digest_tz: str = "Asia/Bangkok"
     digest_bullets_per_item: int = 2
 
     # Jev decision gate for importance re-check (breaking/notable/routine).

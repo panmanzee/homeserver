@@ -305,14 +305,17 @@ def upsert_prices(symbol: str, rows: list[dict[str, Any]]) -> int:
 # --------------------------------------------------------------------------- #
 # Telegram delivery
 # --------------------------------------------------------------------------- #
-def select_unnotified(limit: int, *, breaking_only: bool = False) -> list[dict[str, Any]]:
-    """Enriched items not yet pushed to Telegram, newest first."""
+def select_unnotified(
+    limit: int, *, breaking_only: bool = False, enriched_only: bool = True
+) -> list[dict[str, Any]]:
+    """Items not yet pushed to Telegram, newest first (enriched only by default)."""
     sql = """
         SELECT id, url, title, importance, tickers, summary
         FROM v_news_enriched
         WHERE tg_notified_at IS NULL
-          AND enrichment_status = 'ok'
     """
+    if enriched_only:
+        sql += " AND enrichment_status = 'ok'"
     if breaking_only:
         sql += " AND importance = 'breaking'"
     sql += " ORDER BY published_at DESC NULLS LAST, id DESC LIMIT %s"

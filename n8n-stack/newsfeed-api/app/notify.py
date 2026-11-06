@@ -93,19 +93,36 @@ def _pack(header: str, blocks: list[str], sep: str = "\n\n") -> list[str]:
     return messages
 
 
+def format_topic_line(item: dict[str, Any]) -> str:
+    """One plain line per story: '- Headline' (red dot for breaking). No links."""
+    title = _esc(item.get("title") or "(untitled)")
+    marker = "\U0001f534 " if item.get("importance") == "breaking" else "- "
+    return marker + title
+
+
 def format_digest(
-    items: list[dict[str, Any]], *, max_items: int, max_bullets: int = 2
+    items: list[dict[str, Any]], *, web_url: str = "", date_label: str = ""
 ) -> list[str]:
-    """Build the scheduled digest. Returns 0+ Telegram messages (empty if no news)."""
+    """Daily topic list: every headline on one line, then a link to the web app.
+
+    Returns 0+ Telegram messages (split only if the list exceeds 4096 chars).
+    """
     if not items:
         return []
-    shown = items[:max_items]
-    remainder = len(items) - len(shown)
-    header = f"\U0001f4f0 News digest · {len(shown)} item(s)"
-    lines = [format_item_line(i, max_bullets=max_bullets) for i in shown]
-    if remainder > 0:
-        lines.append(f"…and {remainder} more (in the next digest)")
-    return _pack(header, lines)
+    # breaking stories first, then the rest, each group keeping newest-first order
+    ordered = [i for i in items if i.get("importance") == "breaking"] + [
+        i for i in items if i.get("importance") != "breaking"
+    ]
+    header = f"\U0001f4f0 <b>News {_esc(date_label)}</b> · {len(items)} topics".replace("  ", " ")
+    lines = [format_topic_line(i) for i in ordered]
+    messages = _pack(header + "\n", lines, sep="\n")
+    if web_url:
+        footer = f'\n\n\U0001f449 Read it here: <a href="{_esc(web_url)}">{_esc(web_url)}</a>'
+        if len(messages[-1]) + len(footer) <= TELEGRAM_MAX_CHARS - _SAFETY_MARGIN:
+            messages[-1] += footer
+        else:
+            messages.append(footer.strip())
+    return messages
 
 
 def format_breaking(item: dict[str, Any]) -> str:
@@ -165,6 +182,7 @@ __all__ = [
     "TELEGRAM_MAX_CHARS",
     "format_item_line",
     "format_digest",
+    "format_topic_line",
     "format_breaking",
     "send_telegram",
     "send_all",

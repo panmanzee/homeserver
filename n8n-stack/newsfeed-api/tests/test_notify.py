@@ -59,24 +59,28 @@ def test_format_item_line_handles_no_tickers():
 
 
 def test_format_digest_empty_returns_no_messages():
-    assert notify.format_digest([], max_items=30) == []
+    assert notify.format_digest([]) == []
 
 
-def test_format_digest_caps_and_reports_remainder():
-    items = [_item(id=i, title=f"News {i}") for i in range(40)]
-    body = "\n".join(notify.format_digest(items, max_items=30))
-    assert "30 item(s)" in body
-    assert "and 10 more" in body
+def test_format_digest_is_plain_topic_list_with_web_link():
+    items = [_item(id=1, title="Trump loses"), _item(id=2, title="Fed holds", importance="breaking")]
+    msgs = notify.format_digest(items, web_url="https://news.example/", date_label="Sat 07 Nov")
+    assert len(msgs) == 1
+    body = msgs[0]
+    assert "2 topics" in body and "Sat 07 Nov" in body
+    assert "- Trump loses" in body
+    assert body.index("Fed holds") < body.index("Trump loses")  # breaking first
+    assert "First fact" not in body and "$AAPL" not in body
+    assert body.count("href=") == 1 and 'href="https://news.example/"' in body
 
 
 def test_format_digest_splits_when_over_char_limit():
-    items = [
-        _item(id=i, title="T" * 250, url="https://example.com/" + "p" * 150)
-        for i in range(80)
-    ]
-    messages = notify.format_digest(items, max_items=80)
+    items = [_item(id=i, title="T" * 250) for i in range(80)]
+    messages = notify.format_digest(items, web_url="https://news.example/")
     assert len(messages) > 1
     assert all(len(m) <= notify.TELEGRAM_MAX_CHARS for m in messages)
+    assert "news.example" in messages[-1]
+    assert sum(m.count("- TTT") for m in messages) == 80
 
 
 def test_format_breaking_single_message():

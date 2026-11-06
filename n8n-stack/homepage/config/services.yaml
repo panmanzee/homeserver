@@ -1,12 +1,4 @@
 - Apps:
-    - TaskBot:
-        icon: mdi-robot-happy
-        href: https://workhub.tail9ee4c5.ts.net:8448/
-        description: Telegram task & schedule bot (+ Google Calendar)
-        server: my-docker
-        container: taskbot
-        siteMonitor: http://taskbot:8000/healthz
-
     - Newsfeed:
         icon: si-rss
         href: https://workhub.tail9ee4c5.ts.net:8450/
@@ -49,7 +41,7 @@
 - Infrastructure:
     - PostgreSQL:
         icon: si-postgresql
-        description: Shared DB — newsfeed · taskbot · n8n · rag (pgvector)
+        description: Shared DB — newsfeed · n8n · rag (pgvector)
         server: my-docker
         container: postgres
 

@@ -4,13 +4,23 @@
   "nodes": [
     {
       "parameters": {
-        "rule": { "interval": [ { "field": "cronExpression", "expression": "0 8,18 * * *" } ] }
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
       },
       "id": "d3c3a300-0000-4000-8000-000000000001",
-      "name": "08:00 and 18:00 daily",
+      "name": "08:00 daily",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [200, 300]
+      "position": [
+        200,
+        300
+      ]
     },
     {
       "parameters": {
@@ -21,23 +31,42 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "{}",
-        "options": { "timeout": 120000 }
+        "options": {
+          "timeout": 120000
+        }
       },
       "id": "d3c3a300-0000-4000-8000-000000000002",
       "name": "POST /notify/digest",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [430, 300],
+      "position": [
+        430,
+        300
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "newsfeedApiKey01", "name": "newsfeed X-API-Key" }
+        "httpHeaderAuth": {
+          "id": "newsfeedApiKey01",
+          "name": "newsfeed X-API-Key"
+        }
       }
     }
   ],
   "connections": {
-    "08:00 and 18:00 daily": {
-      "main": [ [ { "node": "POST /notify/digest", "type": "main", "index": 0 } ] ]
+    "08:00 daily": {
+      "main": [
+        [
+          {
+            "node": "POST /notify/digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Bangkok"
+  },
   "active": false
 }
