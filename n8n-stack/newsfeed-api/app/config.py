@@ -54,5 +54,8 @@ class Settings(BaseSettings):
     jev_escalate_below: float = 0.7
     jev_importance_gate_enabled: bool = True
 
+    # Morning infographic: Gemini models tried in order for writing the cards
+    card_models: str = "gemini-3.7-flash,gemini-3.6-flash,gemini-flash-lite-latest,gemma-4-31b-it"
+
 
 settings = Settings()  # type: ignore[call-arg]

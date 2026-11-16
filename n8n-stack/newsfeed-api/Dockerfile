@@ -9,6 +9,11 @@ WORKDIR /app
 # amd64/arm64. If pip tries to build from source on your arch, add:
 #   RUN apt-get update && apt-get install -y --no-install-recommends \
 #         build-essential libxml2-dev libxslt1-dev && rm -rf /var/lib/apt/lists/*
+# Chromium + Thai/emoji fonts for the morning infographic (HTML -> PNG).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        chromium fonts-noto-core fonts-thai-tlwg fonts-noto-color-emoji fontconfig \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

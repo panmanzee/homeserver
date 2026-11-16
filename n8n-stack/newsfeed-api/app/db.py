@@ -99,6 +99,7 @@ def select_unenriched(limit: int, news_ids: list[int] | None = None) -> list[dic
                f.name AS feed_name
         FROM news_items ni
         JOIN feeds f ON f.id = ni.feed_id
+        LEFT JOIN jev_scores js ON js.news_item_id = ni.id
         WHERE NOT EXISTS (
             SELECT 1 FROM enrichments e
             WHERE e.news_item_id = ni.id AND e.status = 'ok'
@@ -110,7 +111,11 @@ def select_unenriched(limit: int, news_ids: list[int] | None = None) -> list[dic
         params.append(news_ids)
     else:
         sql += " AND ni.tg_notified_at IS NULL"
-    sql += " ORDER BY ni.published_at DESC NULLS LAST, ni.id DESC LIMIT %s"
+    # big items first so the scarce Gemini quota goes to what matters
+    sql += (
+        " ORDER BY CASE js.importance WHEN 'breaking' THEN 0 WHEN 'notable' THEN 1 ELSE 2 END,"
+        " ni.published_at DESC NULLS LAST, ni.id DESC LIMIT %s"
+    )
     params.append(limit)
     with pool.connection() as conn:
         return conn.execute(sql, params).fetchall()

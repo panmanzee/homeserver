@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse
 import httpx
 from pydantic import BaseModel, Field
 
-from . import db, enrich, notify, picks, web
+from . import db, enrich, infographic, jevscore, notify, picks, web
 from . import feeds as feeds_mod
 from . import market, prices
 from .config import settings
@@ -116,11 +116,16 @@ def enrich_items(req: EnrichRequest = EnrichRequest()) -> dict[str, Any]:
     expired = 0
     if not req.news_ids:
         expired = db.expire_stale_unenriched(settings.enrich_stale_hours)
+    # Jev first: cheap, no daily quota, and it orders the Gemini queue below.
+    jev = jevscore.score_pending(hours=settings.enrich_stale_hours, limit=100)
     items = db.select_unenriched(limit=req.limit, news_ids=req.news_ids)
     ok = 0
     errors = 0
+    quota_hit = False
 
     for item in items:
+        if quota_hit:
+            break  # Gemini quota exhausted: leave the rest unenriched, record nothing
         try:
             fulltext = feeds_mod.extract_fulltext(item["url"])
         except Exception as exc:  # noqa: BLE001
@@ -133,6 +138,10 @@ def enrich_items(req: EnrichRequest = EnrichRequest()) -> dict[str, Any]:
         try:
             result = enrich.call_llm(item, body_text)
         except enrich.EnrichmentError as exc:
+            if "RESOURCE_EXHAUSTED" in str(exc):
+                log.warning("gemini quota exhausted at item %s; stopping this run", item["id"])
+                quota_hit = True
+                continue
             log.warning("enrichment failed for item %s: %s", item["id"], exc)
             db.save_enrichment_error(
                 item["id"],
@@ -168,7 +177,14 @@ def enrich_items(req: EnrichRequest = EnrichRequest()) -> dict[str, Any]:
         db.upsert_news_regions(item["id"], regions)
         ok += 1
 
-    return {"processed": len(items), "ok": ok, "errors": errors, "expired_stale": expired}
+    return {"processed": len(items), "ok": ok, "errors": errors, "expired_stale": expired,
+            "quota_exhausted": quota_hit, "jev": jev}
+
+
+@app.post("/score", dependencies=[AuthDep])
+def score(hours: int = Query(default=48, ge=1, le=720), limit: int = Query(default=200, ge=1, le=2000)) -> dict[str, Any]:
+    """Jev-score recent items that have no score yet."""
+    return jevscore.score_pending(hours=hours, limit=limit)
 
 
 @app.post("/prices/refresh", dependencies=[AuthDep])
@@ -215,25 +231,17 @@ def notify_urgent() -> dict[str, Any]:
 
 @app.post("/notify/digest", dependencies=[AuthDep])
 def notify_digest() -> dict[str, Any]:
-    """Send the daily topic list (headlines only + web link). Run once a day."""
-    # every headline counts, even ones the LLM has not summarised yet
-    items = db.select_unnotified(limit=settings.digest_max_items, enriched_only=False)
-    if not items:
-        return {"messages": 0, "items": 0}
-
-    from zoneinfo import ZoneInfo
-
-    today = datetime.now(ZoneInfo(settings.digest_tz)).strftime("%a %d %b")
-    messages = notify.format_digest(
-        items, web_url=settings.newsfeed_web_url, date_label=today
-    )
+    """Morning infographic (falls back to the text topic list). Run once a day."""
     try:
-        sent = notify.send_all(messages)
+        return infographic.build_morning(dry_run=False)
     except notify.TelegramError as exc:
         raise HTTPException(status_code=502, detail=f"telegram send failed: {exc}")
 
-    marked = db.mark_notified([i["id"] for i in items])
-    return {"messages": sent, "items": marked}
+
+@app.post("/notify/digest/preview", dependencies=[AuthDep])
+def notify_digest_preview() -> dict[str, Any]:
+    """Dry run: build cards + PNGs into /tmp/infographic, send nothing."""
+    return infographic.build_morning(dry_run=True)
 
 
 @app.get("/news", dependencies=[AuthDep])

@@ -121,6 +121,17 @@ CREATE TABLE IF NOT EXISTS fundamentals (
     fetched_at           timestamptz NOT NULL DEFAULT now()
 );
 
+-- Jev importance/topic scores (migration_002_jev_scores.sql); independent of Gemini quota.
+CREATE TABLE IF NOT EXISTS jev_scores (
+    news_item_id     bigint PRIMARY KEY REFERENCES news_items(id) ON DELETE CASCADE,
+    importance       text,
+    confidence       real,
+    probabilities    jsonb,
+    topic            text,
+    topic_confidence real,
+    created_at       timestamptz NOT NULL DEFAULT now()
+);
+
 -- Dropped + recreated (not CREATE OR REPLACE) so column order can change on upgrade.
 DROP VIEW IF EXISTS v_news_enriched;
 CREATE VIEW v_news_enriched AS
