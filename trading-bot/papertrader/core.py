@@ -54,7 +54,7 @@ def clean(df, spike=0.06, back=0.7):
     return df, [str(d.date()) for d in df.index[bad.reindex(df.index, fill_value=False).values]]
 
 
-def load(path_dir, names, until=None):
+def load(path_dir, names, until=None, weekdays_only=True):
     """until: drop bars dated on/after this day (use to cut an unfinished bar in research)."""
     out, fixes = {}, {}
     for n in names:
@@ -62,6 +62,8 @@ def load(path_dir, names, until=None):
         if d.index.tz is not None:
             d.index = d.index.tz_localize(None)
         d.index = d.index.normalize()
+        if weekdays_only:   # Yahoo serves transient Sat/Sun bars it later deletes; no decision may be dated Sat/Sun
+            d = d[d.index.dayofweek < 5]
         if until is not None:
             d = d[d.index < pd.Timestamp(until)]
         out[n], fixes[n] = clean(d, SPIKE[market_of(n)])
