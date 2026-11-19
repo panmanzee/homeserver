@@ -93,6 +93,37 @@ services:
       --config /freqtrade/user_data/config_th.json
       --strategy TrendSimple
 
+  # Shadow paper bots (2026-11-19): BTC/USDT:USDT Binance USDM perp, 1x isolated, 3000 USDT fake. Research: E_final.md (L1 post-hoc candidate, O1 control).
+  freqtrade-btc-l1:
+    <<: *ft
+    container_name: freqtrade-btc-l1
+    environment:
+      FREQTRADE__DRY_RUN: "true"
+      FREQTRADE__BOT_NAME: "btc-fut-l1-shadow"
+    ports:
+      - "127.0.0.1:8015:8080"
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade-btc-l1.log
+      --db-url sqlite:////freqtrade/user_data/tradesv3.dryrun-fut-l1.sqlite
+      --config /freqtrade/user_data/config_fut_l1.json
+      --strategy BtcTrendL1
+
+  freqtrade-btc-o1:
+    <<: *ft
+    container_name: freqtrade-btc-o1
+    environment:
+      FREQTRADE__DRY_RUN: "true"
+      FREQTRADE__BOT_NAME: "btc-fut-o1-shadow"
+    ports:
+      - "127.0.0.1:8016:8080"
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade-btc-o1.log
+      --db-url sqlite:////freqtrade/user_data/tradesv3.dryrun-fut-o1.sqlite
+      --config /freqtrade/user_data/config_fut_o1.json
+      --strategy BtcTrendO1
+
   # Stocks + forex PAPER bots (no broker, no keys). Own engine: papertrader/ (freqtrade is crypto-only).
   # Picks from Projects/trading-bot/stocks-report.md + forex-report.md: both FAILED their gates -> test only (S3 near-miss; F3 clearly short on Sharpe/luck).
   papertrader-stocks:
