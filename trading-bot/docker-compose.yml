@@ -134,6 +134,7 @@ services:
     build: ./papertrader
     image: papertrader:latest
     container_name: papertrader-stocks
+    profiles: ["old"]
     restart: unless-stopped
     mem_limit: 512m
     environment:
@@ -148,6 +149,7 @@ services:
   papertrader-forex:
     image: papertrader:latest
     container_name: papertrader-forex
+    profiles: ["old"]
     restart: unless-stopped
     mem_limit: 512m
     depends_on: [papertrader-stocks]
