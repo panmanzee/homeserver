@@ -1,5 +1,6 @@
 # Trading bot - freqtrade PAPER TRADING (dry_run) only. Never live.
 # v2 (2026-10-23): ONE bot, BTC/USDT only = freqtrade-btc. Old A/B/C kept under profile 'old' (stopped).
+# 2026-11-20: ALL crypto bots retired (user: crypto too hard). Moved to profile old, data kept. Focus = oil + gold.
 # Old bots:
 #   freqtrade      = TrendSimple (no Jev)      API http://127.0.0.1:8011
 #   freqtrade-jev  = TrendSimpleJev (Jev gate) API http://127.0.0.1:8012
@@ -77,6 +78,7 @@ services:
   freqtrade-btc:
     <<: *ft
     container_name: freqtrade-btc
+    profiles: ["old"]
     environment:
       FREQTRADE__DRY_RUN: "true"
       FREQTRADE__BOT_NAME: "btc-thb-trend-paper"
@@ -97,6 +99,7 @@ services:
   freqtrade-btc-l1:
     <<: *ft
     container_name: freqtrade-btc-l1
+    profiles: ["old"]
     environment:
       FREQTRADE__DRY_RUN: "true"
       FREQTRADE__BOT_NAME: "btc-fut-l1-shadow"
@@ -112,6 +115,7 @@ services:
   freqtrade-btc-o1:
     <<: *ft
     container_name: freqtrade-btc-o1
+    profiles: ["old"]
     environment:
       FREQTRADE__DRY_RUN: "true"
       FREQTRADE__BOT_NAME: "btc-fut-o1-shadow"
