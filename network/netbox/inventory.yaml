@@ -1,0 +1,180 @@
+# homelab inventory as data, loaded into NetBox by import.py
+# every fact comes from ../discovery/raw (collected 2026-11-21) unless a "src:" says otherwise
+# planned = zones.md target. NetBox has no "planned" status for IPs/prefixes/VLANs,
+# so those get status reserved + tag "planned".
+
+site:
+  name: home
+  slug: home
+  description: Pan's home lab, behind the ISP router 192.168.0.1 (no rack)
+
+manufacturer:
+  name: Lenovo
+  slug: lenovo
+
+device_type:
+  model: ThinkCentre M93p Tiny (10AA)
+  slug: thinkcentre-m93p-tiny-10aa
+  u_height: 0
+
+device_roles:
+  - {name: hypervisor, slug: hypervisor, color: 2196f3}
+
+cluster_type: {name: Proxmox, slug: proxmox}
+cluster: {name: pve, type: proxmox}
+
+tags:
+  - {name: planned, slug: planned, color: ffc107}
+  - {name: docker, slug: docker, color: 03a9f4}
+
+prefix_roles:
+  - {name: home-lan, slug: home-lan}
+  - {name: mgmt, slug: mgmt}
+  - {name: servers, slug: servers}
+  - {name: dmz, slug: dmz}
+  - {name: customer-vm, slug: customer-vm}
+  - {name: lab, slug: lab}
+  - {name: tailnet, slug: tailnet}
+
+# zones.md. VLAN 50 (CUSTVM) is left out on purpose: vmbr1 is untagged today (host.txt bridge vlan)
+vlan_group: {name: home-zones, slug: home-zones}
+vlans:
+  - {vid: 10, name: MGMT, description: Proxmox host services, Zabbix, NetBox}
+  - {vid: 20, name: SERVERS, description: LXC 101 workhub}
+  - {vid: 30, name: DMZ, description: LXC 102 cloudhost (public hosting)}
+  - {vid: 99, name: LAB, description: test guests only}
+
+prefixes:
+  - {prefix: 192.168.0.0/24, status: active, role: home-lan, description: Home LAN (vmbr0), ISP router 192.168.0.1}
+  - {prefix: 10.77.0.0/24, status: active, role: customer-vm, description: Customer VMs (vmbr1), gateway 10.77.0.1}
+  - {prefix: 10.10.10.0/24, status: reserved, planned: true, role: mgmt, vlan: 10, description: "planned MGMT, gw 10.10.10.1"}
+  - {prefix: 10.10.20.0/24, status: reserved, planned: true, role: servers, vlan: 20, description: "planned SERVERS, gw 10.10.20.1"}
+  - {prefix: 10.10.30.0/24, status: reserved, planned: true, role: dmz, vlan: 30, description: "planned DMZ, gw 10.10.30.1"}
+  - {prefix: 10.10.99.0/24, status: reserved, planned: true, role: lab, vlan: 99, description: "planned LAB, gw 10.10.99.1"}
+  - {prefix: 100.64.0.0/10, status: container, role: tailnet, description: Tailscale CGNAT range, tail9ee4c5.ts.net}
+  # docker bridges (ct101.txt / ct102.txt routes)
+  - {prefix: 172.17.0.0/16, status: active, docker: true, description: workhub docker0 (down)}
+  - {prefix: 172.18.0.0/16, status: active, docker: true, description: workhub br-d248224a106c (down)}
+  - {prefix: 172.19.0.0/16, status: active, docker: true, description: workhub br-8e2c05b14e2c}
+  - {prefix: 172.20.0.0/16, status: active, docker: true, description: workhub br-25b56a940ddf}
+  - {prefix: 172.21.0.0/16, status: active, docker: true, description: workhub br-dabe7020aea3}
+  - {prefix: 172.23.0.0/16, status: active, docker: true, description: workhub br-1457dc226f90 (down)}
+  - {prefix: 172.24.0.0/16, status: active, docker: true, description: workhub br-cf9ea24b3e7f (down)}
+  - {prefix: 10.0.0.0/24, status: active, docker: true, description: cloudhost docker0 (down)}
+  - {prefix: 10.0.1.0/24, status: active, docker: true, description: cloudhost br-164a92ac10fd}
+  - {prefix: 10.0.2.0/24, status: active, docker: true, description: cloudhost br-fda693677b26}
+  - {prefix: 10.0.3.0/24, status: active, docker: true, description: cloudhost br-446e9baf5054 (down)}
+
+device:
+  name: panhomelab
+  role: hypervisor
+  status: active
+  comments: |
+    Proxmox VE pve-manager 9.2.21, kernel 7.0.14-25-pve. 4 cores (i5-4570T), 7829 MB RAM (8 GB DDR3L),
+    one NIC (nic0). src: discovery/raw/host.txt
+  interfaces:
+    - {name: vmbr0, type: bridge, description: home LAN bridge, uplink nic0}
+    - {name: vmbr1, type: bridge, description: customer VM bridge}
+    - {name: nic0, type: 1000base-t, bridge: vmbr0, description: only physical port, enslaved to vmbr0}
+    - {name: tailscale0, type: virtual, description: Tailscale}
+    - {name: vmbr2, type: bridge, planned: true, description: "planned VLAN-aware internal bridge, no physical port"}
+    - {name: vmbr2.10, type: virtual, parent: vmbr2, planned: true, description: "planned MGMT gateway"}
+    - {name: vmbr2.20, type: virtual, parent: vmbr2, planned: true, description: "planned SERVERS gateway"}
+    - {name: vmbr2.30, type: virtual, parent: vmbr2, planned: true, description: "planned DMZ gateway"}
+    - {name: vmbr2.99, type: virtual, parent: vmbr2, planned: true, description: "planned LAB gateway"}
+  ips:
+    - {address: 192.168.0.101/24, interface: vmbr0, status: active, primary: true}
+    - {address: 10.77.0.1/24, interface: vmbr1, status: active}
+    - {address: 100.109.143.18/32, interface: tailscale0, status: active}
+    - {address: 10.10.10.1/24, interface: vmbr2.10, status: reserved, planned: true}
+    - {address: 10.10.20.1/24, interface: vmbr2.20, status: reserved, planned: true}
+    - {address: 10.10.30.1/24, interface: vmbr2.30, status: reserved, planned: true}
+    - {address: 10.10.99.1/24, interface: vmbr2.99, status: reserved, planned: true}
+  # listening sockets in host.txt; names for ports 8791 and 9119 are from MAP.md
+  services:
+    - {name: ssh, protocol: tcp, ports: [22], description: "0.0.0.0 and ::"}
+    - {name: rpcbind, protocol: tcp, ports: [111], description: "0.0.0.0 and ::"}
+    - {name: smb, protocol: tcp, ports: [445], description: "0.0.0.0 and ::, MAP.md says Tailscale only"}
+    - {name: pveproxy, protocol: tcp, ports: [8006], description: Proxmox web UI}
+    - {name: spiceproxy, protocol: tcp, ports: [3128], description: "*:3128"}
+    - {name: pvedaemon-local, protocol: tcp, ports: [85], description: "127.0.0.1 only"}
+    - {name: smtp-local, protocol: tcp, ports: [25], description: "127.0.0.1 and ::1 only (postfix)"}
+    - {name: mission-control, protocol: tcp, ports: [8791], description: "127.0.0.1 and tailscale IP (name from MAP.md)"}
+    - {name: web-dashboard-9119, protocol: tcp, ports: [9119], description: "127.0.0.1 only (name from MAP.md)"}
+    - {name: tailscale-8452, protocol: tcp, ports: [8452], description: "tailscale IP only"}
+
+# vmid / state / resources from host.txt (pct list, qm list) and ctNNN-config.txt
+virtual_machines:
+  - name: workhub
+    status: active
+    vcpus: 4
+    memory: 4608
+    disk: 61440
+    comments: "LXC 101, unprivileged, onboot, ubuntu, rootfs local-lvm 60G, swap 1024, dns 1.1.1.1 8.8.8.8. src: ct101-config.txt"
+    interfaces:
+      - {name: eth0, description: "net0 bridge=vmbr0 ip=dhcp mac BC:24:11:B1:26:A1"}
+      - {name: tailscale0, description: Tailscale}
+    ips:
+      # the two DHCP leases swapped since MAP.md (2026-10-23): ct101.txt shows .102
+      - {address: 192.168.0.102/24, interface: eth0, status: dhcp, primary: true}
+      - {address: 100.108.65.118/32, interface: tailscale0, status: active}
+      - {address: 10.10.20.10/24, interface: eth0, status: reserved, planned: true}
+    services:
+      - {name: ssh, protocol: tcp, ports: [22], description: "0.0.0.0 and ::"}
+      - {name: smtp-local, protocol: tcp, ports: [25], description: "127.0.0.1 only"}
+      - {name: adguard-dns, protocol: tcp, ports: [53], description: "100.108.65.118 only, docker adguard"}
+      - {name: adguard-dns-udp, protocol: udp, ports: [53], description: "100.108.65.118 only, docker adguard"}
+      - {name: jev-decision-server, protocol: tcp, ports: [8000], description: "127.0.0.1->8000, docker"}
+      - {name: newsfeed-api, protocol: tcp, ports: [8001], description: "127.0.0.1->8000, docker"}
+      - {name: vaultwarden, protocol: tcp, ports: [8003], description: "127.0.0.1->80, docker vaultwarden/server:1.37.2"}
+      - {name: homepage, protocol: tcp, ports: [8004], description: "127.0.0.1->3000, docker homepage v2.2.0"}
+      - {name: rag-api, protocol: tcp, ports: [8005], description: "127.0.0.1->8000, docker"}
+      - {name: uptime-kuma, protocol: tcp, ports: [8006], description: "127.0.0.1->3001, docker 1.23.17"}
+      - {name: adguard-ui, protocol: tcp, ports: [8007], description: "127.0.0.1->3000, docker adguard v0.107.79"}
+      - {name: actual, protocol: tcp, ports: [8008], description: "127.0.0.1->5006, docker actual-server 26.9.0"}
+      - {name: kanjidojo, protocol: tcp, ports: [8009], description: "127.0.0.1->8000, docker"}
+      - {name: sms-gateway, protocol: tcp, ports: [8500], description: "127.0.0.1->8500, docker"}
+      - {name: n8n, protocol: tcp, ports: [5678], description: "0.0.0.0 and ::, docker n8nio/n8n"}
+      - {name: postgres, protocol: tcp, ports: [5432], description: "0.0.0.0 and ::, docker pgvector pg16"}
+      - {name: cloudflared-metrics, protocol: tcp, ports: [20241], description: "127.0.0.1 only"}
+      - {name: tailscale-serve-443, protocol: tcp, ports: [443], description: "tailscale IP only"}
+      - {name: tailscale-serve-10000, protocol: tcp, ports: [10000], description: "tailscale IP only"}
+      - {name: tailscale-serve-8443-8450, protocol: tcp, ports: [8443, 8444, 8445, 8446, 8447, 8449, 8450], description: "tailscale IP only"}
+
+  - name: cloudhost
+    status: active
+    vcpus: 2
+    memory: 3072
+    disk: 51200
+    comments: "LXC 102, unprivileged, onboot, ubuntu, rootfs local-lvm 50G, swap 1024, dns 1.1.1.1, snapshot pre-upgrade-20261023b. src: ct102-config.txt"
+    interfaces:
+      - {name: eth0, description: "net0 bridge=vmbr0 ip=dhcp mac BC:24:11:F3:44:6D"}
+      - {name: tailscale0, description: Tailscale}
+    ips:
+      - {address: 192.168.0.104/24, interface: eth0, status: dhcp, primary: true}
+      - {address: 100.102.34.29/32, interface: tailscale0, status: active}
+      - {address: 10.10.30.10/24, interface: eth0, status: reserved, planned: true}
+    services:
+      - {name: ssh, protocol: tcp, ports: [22], description: "0.0.0.0 and ::"}
+      - {name: smtp-local, protocol: tcp, ports: [25], description: "127.0.0.1 only"}
+      - {name: http, protocol: tcp, ports: [80], description: "coolify-proxy traefik v3.6"}
+      - {name: https, protocol: tcp, ports: [443], description: "coolify-proxy traefik v3.6"}
+      - {name: https-quic, protocol: udp, ports: [443], description: "coolify-proxy traefik v3.6"}
+      - {name: traefik-8080, protocol: tcp, ports: [8080], description: "coolify-proxy, 0.0.0.0 and ::"}
+      - {name: coolify-ui, protocol: tcp, ports: [8000], description: "docker coolify 4.7.6, 8000->8080"}
+      - {name: coolify-realtime, protocol: tcp, ports: [6001, 6002], description: "docker coolify"}
+      - {name: cloudhost-portal, protocol: tcp, ports: [8100], description: "127.0.0.1 only, docker"}
+      - {name: cloudhost-billing, protocol: tcp, ports: [8090], description: "127.0.0.1 only, docker"}
+      - {name: cloudflared-metrics, protocol: tcp, ports: [20241], description: "127.0.0.1 only"}
+
+  # stopped guests. no config dump for ct100 (not running), only pct list
+  - name: old-ct100
+    status: offline
+    comments: "LXC 100, stopped. src: host.txt pct list (name only; MAP.md lists 2 cpu/2 GB/8 GB)"
+  - name: ubuntu-2404-template
+    status: offline
+    memory: 512
+    disk: 3584
+    comments: "VM template 9000, stopped, boot disk 3.5 GB. src: host.txt qm list. Attached to vmbr1 per MAP.md"
+    interfaces:
+      - {name: net0, description: "bridge vmbr1 (MAP.md)"}

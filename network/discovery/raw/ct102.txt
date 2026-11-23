@@ -1,0 +1,64 @@
+cloudhost
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+eth0@if6         UP             192.168.0.104/24 metric 1024 fe80::be24:11ff:fef3:446d/64 
+tailscale0       UNKNOWN        100.102.34.29/32 fd7a:115c:a1e0::6828:221e/128 fe80::1074:7103:8c20:f1a1/64 
+br-164a92ac10fd  UP             10.0.1.1/24 fd78:d811:a5c6::1/64 fe80::46:92ff:fe65:3686/64 
+br-446e9baf5054  DOWN           10.0.3.1/24 
+br-fda693677b26  UP             10.0.2.1/24 fe80::b091:c8ff:feb4:36f4/64 
+docker0          DOWN           10.0.0.1/24 fe80::f006:2ff:fea4:8d38/64 
+veth94bac58@if2  UP             fe80::50dc:8dff:feb0:f99f/64 
+vethb301526@if2  UP             fe80::e0cd:7fff:fe59:fbaf/64 
+veth7fe6784@if2  UP             fe80::82:3eff:fef9:8f52/64 
+veth3cedbf6@if2  UP             fe80::b47f:c7ff:fe12:3566/64 
+vethaecf6fc@if2  UP             fe80::84d3:cdff:fee8:1f00/64 
+veth82bf643@if2  UP             fe80::c0df:1eff:fe7b:b379/64 
+veth175b3b6@if2  UP             fe80::6055:38ff:feb6:8584/64 
+veth35f4a86@if3  UP             fe80::e017:36ff:fe82:b0c5/64 
+veth3b6b3ac@if2  UP             fe80::240f:c7ff:fe84:592f/64 
+veth0e30c7f@if2  UP             fe80::9893:16ff:fe99:eec5/64 
+veth0754462@if2  UP             fe80::782e:7aff:fe15:1a80/64 
+default via 192.168.0.1 dev eth0 proto dhcp src 192.168.0.104 metric 1024 
+10.0.0.0/24 dev docker0 proto kernel scope link src 10.0.0.1 linkdown 
+10.0.1.0/24 dev br-164a92ac10fd proto kernel scope link src 10.0.1.1 
+10.0.2.0/24 dev br-fda693677b26 proto kernel scope link src 10.0.2.1 
+10.0.3.0/24 dev br-446e9baf5054 proto kernel scope link src 10.0.3.1 linkdown 
+10.77.0.0/24 via 192.168.0.101 dev eth0 
+192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.104 metric 1024 
+192.168.0.1 dev eth0 proto dhcp scope link src 192.168.0.104 metric 1024 
+
+# docker
+coolify	coollabsio/coolify:4.7.6	8000/tcp, 8443/tcp, 0.0.0.0:6001-6002->6001-6002/tcp, [::]:6001-6002->6001-6002/tcp, 9000/tcp, 0.0.0.0:8000->8080/tcp, [::]:8000->8080/tcp
+coolify-db	postgres:15-alpine	5432/tcp
+coolify-redis	redis:7-alpine	6379/tcp
+coolify-sentinel	coollabsio/sentinel:1.1.5	
+cloudhost-portal	cloudhost-portal:latest	127.0.0.1:8100->8100/tcp
+cloudhost-compute	cloudhost-compute:latest	8110/tcp
+cloudhost-billing	cloudhost-billing:latest	127.0.0.1:8090->8090/tcp
+l7iz0eqcaqntnl7kszgsm5yr-115329786959	l7iz0eqcaqntnl7kszgsm5yr:latest	80/tcp
+vgrm0nhayby502xhlx7cu24h-013705228437	vgrm0nhayby502xhlx7cu24h:a763a0edde664559fbfe5d333aa844682c9fca1d	8080/tcp
+coolify-proxy	traefik:v3.6	0.0.0.0:80->80/tcp, [::]:80->80/tcp, 0.0.0.0:443->443/tcp, [::]:443->443/tcp, 0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp, 0.0.0.0:443->443/udp, [::]:443->443/udp
+
+# listening
+0.0.0.0:22
+0.0.0.0:443
+0.0.0.0:6001
+0.0.0.0:6002
+0.0.0.0:80
+0.0.0.0:8000
+0.0.0.0:8080
+100.102.34.29%tailscale0:50297
+[::1]:25
+127.0.0.1:20241
+127.0.0.1:25
+127.0.0.1:8090
+127.0.0.1:8100
+127.0.0.53%lo:53
+127.0.0.54:53
+[::]:22
+[::]:443
+[::]:6001
+[::]:6002
+[::]:80
+[::]:8000
+[::]:8080
+[fd7a:115c:a1e0::6828:221e]%tailscale0:46345

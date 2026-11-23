@@ -1,0 +1,10 @@
+coolify coollabsio/coolify:4.7.6
+coolify-db postgres:15-alpine
+coolify-redis redis:7-alpine
+coolify-sentinel coollabsio/sentinel:1.1.5
+cloudhost-portal cloudhost-portal:latest
+cloudhost-compute cloudhost-compute:latest
+cloudhost-billing cloudhost-billing:latest
+l7iz0eqcaqntnl7kszgsm5yr-115329786959 l7iz0eqcaqntnl7kszgsm5yr:latest
+vgrm0nhayby502xhlx7cu24h-013705228437 vgrm0nhayby502xhlx7cu24h:a763a0edde664559fbfe5d333aa844682c9fca1d
+coolify-proxy traefik:v3.6

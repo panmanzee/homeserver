@@ -1,0 +1,269 @@
+
+=== versions ===
+Terraform v1.9.8
+on linux_amd64
++ provider registry.terraform.io/hashicorp/aws v5.100.0
+
+Your version of Terraform is out of date! The latest version
+is 1.17.2. You can update by downloading from https://www.terraform.io/downloads.html
+Sat Nov 21 15:51:46 +07 2026
+
+=== terraform fmt -check ===
+
+=== terraform init ===
+[0m[1mInitializing the backend...[0m
+[0m[1mInitializing provider plugins...[0m
+- Reusing previous version of hashicorp/aws from the dependency lock file
+- Using previously-installed hashicorp/aws v5.100.0
+
+[0m[1m[32mTerraform has been successfully initialized![0m[32m[0m
+
+=== terraform validate ===
+[32m[1mSuccess![0m The configuration is valid.
+[0m
+
+=== start localstack on 4567 ===
+1e7bac1c7ced6db882f5d83c3ff3c60538096ecf42a289ce37c1df0d5d4da728
+{"services": {"acm": "available", "apigateway": "available", "cloudformation": "available", "cloudwatch": "available", "config": "available", "dynamodb": "available", "dynamodbstreams": "available", "ec2": "available", "es": "available", "events": "available", "firehose": "available", "iam": "available", "kinesis": "available", "kms": "available", "lambda": "available", "logs": "available", "opens
+
+=== plan (use_localstack=true, everything incl. VPN connection) ===
+      + type                           = "ipsec.1"
+      + vgw_telemetry                  = (known after apply)
+      + vpn_gateway_id                 = (known after apply)
+
+      + tunnel1_log_options (known after apply)
+
+      + tunnel2_log_options (known after apply)
+    }
+
+  # aws_vpn_gateway.vgw will be created
+  + resource "aws_vpn_gateway" "vgw" {
+      + amazon_side_asn = "64512"
+      + arn             = (known after apply)
+      + id              = (known after apply)
+      + tags            = {
+          + "Name" = "homelab-dr-vgw"
+        }
+      + tags_all        = {
+          + "Managed" = "terraform"
+          + "Name"    = "homelab-dr-vgw"
+          + "Project" = "homelab-dr"
+        }
+      + vpc_id          = (known after apply)
+    }
+
+  # aws_vpn_gateway_route_propagation.private[0] will be created
+  + resource "aws_vpn_gateway_route_propagation" "private" {
+      + id             = (known after apply)
+      + route_table_id = (known after apply)
+      + vpn_gateway_id = (known after apply)
+    }
+
+Plan: 24 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + amazon_side_asn = 64512
+  + homelab_asn     = 65010
+  + tunnels         = (sensitive value)
+  + vgw_id          = (known after apply)
+  + vpc_id          = (known after apply)
+plan exit: 0
+
+=== apply, VPN connection included ===
+aws_vpc.dr: Creation complete after 12s [id=vpc-881cf8dd]
+aws_route_table.private: Creating...
+aws_vpn_gateway.vgw: Creating...
+aws_subnet.public[1]: Creating...
+aws_route_table.public: Creating...
+aws_subnet.public[0]: Creating...
+aws_subnet.private[1]: Creating...
+aws_subnet.private[0]: Creating...
+aws_internet_gateway.igw: Creating...
+aws_security_group.dr: Creating...
+aws_subnet.private[0]: Creation complete after 0s [id=subnet-4766f115]
+aws_subnet.private[1]: Creation complete after 0s [id=subnet-de6e0760]
+aws_internet_gateway.igw: Creation complete after 0s [id=igw-c2e64ffc]
+aws_network_acl.private: Creating...
+aws_network_acl.private: Creation complete after 0s [id=acl-074c2399]
+aws_network_acl_rule.in_homelab[0]: Creating...
+aws_network_acl_rule.out_homelab[0]: Creating...
+aws_network_acl_rule.in_ephemeral_vpc: Creating...
+aws_network_acl_rule.out_vpc: Creating...
+aws_network_acl_rule.in_homelab[0]: Creation complete after 0s [id=nacl-3250004159]
+aws_network_acl_rule.in_ephemeral_vpc: Creation complete after 0s [id=nacl-1720391409]
+aws_network_acl_rule.out_homelab[0]: Creation complete after 0s [id=nacl-3595605121]
+aws_network_acl_rule.out_vpc: Creation complete after 0s [id=nacl-2714650225]
+aws_route_table.private: Creation complete after 0s [id=rtb-31c4cdff]
+aws_route_table.public: Creation complete after 0s [id=rtb-d5a0bd65]
+aws_route_table_association.private[0]: Creating...
+aws_route_table_association.private[1]: Creating...
+aws_route.public_default: Creating...
+aws_route_table_association.private[0]: Creation complete after 0s [id=rtbassoc-ff7856d3]
+aws_route_table_association.private[1]: Creation complete after 0s [id=rtbassoc-37b9822c]
+aws_route.public_default: Creation complete after 0s [id=r-rtb-d5a0bd651080289494]
+aws_security_group.dr: Creation complete after 0s [id=sg-b69b0f094f55fb6b2]
+aws_subnet.public[0]: Still creating... [10s elapsed]
+aws_subnet.public[1]: Still creating... [10s elapsed]
+aws_vpn_gateway.vgw: Still creating... [10s elapsed]
+aws_vpn_gateway.vgw: Creation complete after 10s [id=vgw-8d7ddd46]
+aws_vpn_gateway_route_propagation.private[0]: Creating...
+aws_subnet.public[0]: Creation complete after 10s [id=subnet-4a96c873]
+aws_vpn_connection.home[0]: Creating...
+aws_subnet.public[1]: Creation complete after 10s [id=subnet-0db705c2]
+aws_route_table_association.public[0]: Creating...
+aws_route_table_association.public[1]: Creating...
+aws_route_table_association.public[0]: Creation complete after 0s [id=rtbassoc-89f6dd56]
+aws_route_table_association.public[1]: Creation complete after 0s [id=rtbassoc-58c88304]
+aws_vpn_connection.home[0]: Still creating... [10s elapsed]
+aws_vpn_connection.home[0]: Creation complete after 10s [id=vpn-6c3447ce]
+
+Error: creating Budget (homelab-dr-5usd): operation error Budgets: CreateBudget, https response error StatusCode: 501, RequestID: 1d9a0558-8a4a-4eeb-89e0-8e6bb911b9fc, api error InternalFailure: API for service 'budgets' not yet implemented or pro feature - please check https://docs.localstack.cloud/references/coverage/ for further information
+
+  with aws_budgets_budget.monthly[0],
+  on budget.tf line 1, in resource "aws_budgets_budget" "monthly":
+   1: resource "aws_budgets_budget" "monthly" {
+
+
+Error: enabling Route Table (rtb-31c4cdff) VPN Gateway (vgw-8d7ddd46) route propagation: operation error EC2: EnableVgwRoutePropagation, https response error StatusCode: 501, RequestID: a0012fb2-f10b-4219-be3b-b05f11ac81b1, api error InternalFailure: The enable_vgw_route_propagation action has not been implemented
+
+  with aws_vpn_gateway_route_propagation.private[0],
+  on vpn.tf line 14, in resource "aws_vpn_gateway_route_propagation" "private":
+  14: resource "aws_vpn_gateway_route_propagation" "private" {
+
+apply(full) exit: 1
+
+=== state after first apply ===
+aws_customer_gateway.home
+aws_internet_gateway.igw
+aws_network_acl.private
+aws_network_acl_rule.in_ephemeral_vpc
+aws_network_acl_rule.in_homelab[0]
+aws_network_acl_rule.out_homelab[0]
+aws_network_acl_rule.out_vpc
+aws_route.public_default
+aws_route_table.private
+aws_route_table.public
+aws_route_table_association.private[0]
+aws_route_table_association.private[1]
+aws_route_table_association.public[0]
+aws_route_table_association.public[1]
+aws_security_group.dr
+aws_subnet.private[0]
+aws_subnet.private[1]
+aws_subnet.public[0]
+aws_subnet.public[1]
+aws_vpc.dr
+aws_vpn_connection.home[0]
+aws_vpn_gateway.vgw
+
+=== destroy ===
+aws_route_table.public: Destroying... [id=rtb-d5a0bd65]
+aws_internet_gateway.igw: Destruction complete after 0s
+aws_route_table.private: Destruction complete after 0s
+aws_route_table.public: Destruction complete after 0s
+aws_vpn_connection.home[0]: Still destroying... [id=vpn-6c3447ce, 10s elapsed]
+aws_vpn_connection.home[0]: Destruction complete after 10s
+aws_vpn_gateway.vgw: Destroying... [id=vgw-8d7ddd46]
+aws_customer_gateway.home: Destroying... [id=cgw-1bd46007]
+aws_customer_gateway.home: Destruction complete after 0s
+aws_vpn_gateway.vgw: Still destroying... [id=vgw-8d7ddd46, 10s elapsed]
+aws_vpn_gateway.vgw: Destruction complete after 10s
+aws_vpc.dr: Destroying... [id=vpc-881cf8dd]
+aws_vpc.dr: Destruction complete after 0s
+
+Destroy complete! Resources: 22 destroyed.
+destroy exit: 0
+
+=== second apply, excluding budget + route propagation (501 on localstack) ===
+aws_network_acl_rule.out_homelab[0]: Creating...
+aws_network_acl_rule.in_ephemeral_vpc: Creating...
+aws_network_acl_rule.out_vpc: Creating...
+aws_network_acl_rule.in_homelab[0]: Creating...
+aws_network_acl_rule.in_homelab[0]: Creation complete after 0s [id=nacl-3673937008]
+aws_network_acl_rule.in_ephemeral_vpc: Creation complete after 0s [id=nacl-1833665828]
+aws_network_acl_rule.out_vpc: Creation complete after 0s [id=nacl-3969905188]
+aws_network_acl_rule.out_homelab[0]: Creation complete after 0s [id=nacl-2600542420]
+aws_route_table.private: Creation complete after 0s [id=rtb-70e38fa4]
+aws_route_table.public: Creation complete after 0s [id=rtb-7453f688]
+aws_route_table_association.private[0]: Creating...
+aws_route_table_association.private[1]: Creating...
+aws_route.public_default: Creating...
+aws_route_table_association.private[1]: Creation complete after 0s [id=rtbassoc-ab8467bc]
+aws_route_table_association.private[0]: Creation complete after 0s [id=rtbassoc-1b51c3a6]
+aws_security_group.dr: Creation complete after 0s [id=sg-2328a50545074784d]
+aws_route.public_default: Creation complete after 0s [id=r-rtb-7453f6881080289494]
+aws_vpn_gateway.vgw: Still creating... [10s elapsed]
+aws_subnet.public[0]: Still creating... [10s elapsed]
+aws_subnet.public[1]: Still creating... [10s elapsed]
+aws_vpn_gateway.vgw: Creation complete after 10s [id=vgw-482287c8]
+aws_vpn_connection.home[0]: Creating...
+aws_subnet.public[1]: Creation complete after 10s [id=subnet-c0d90c7c]
+aws_subnet.public[0]: Creation complete after 10s [id=subnet-dca685f0]
+aws_route_table_association.public[1]: Creating...
+aws_route_table_association.public[0]: Creating...
+aws_route_table_association.public[1]: Creation complete after 0s [id=rtbassoc-6ea70304]
+aws_route_table_association.public[0]: Creation complete after 0s [id=rtbassoc-a84b9b0a]
+aws_vpn_connection.home[0]: Still creating... [10s elapsed]
+aws_vpn_connection.home[0]: Creation complete after 10s [id=vpn-921cbbfb]
+
+Apply complete! Resources: 22 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+amazon_side_asn = 64512
+homelab_asn = 65010
+tunnels = <sensitive>
+vgw_id = "vgw-482287c8"
+vpc_id = "vpc-7780caa6"
+apply(reduced) exit: 0
+aws_customer_gateway.home
+aws_internet_gateway.igw
+aws_network_acl.private
+aws_network_acl_rule.in_ephemeral_vpc
+aws_network_acl_rule.in_homelab[0]
+aws_network_acl_rule.out_homelab[0]
+aws_network_acl_rule.out_vpc
+aws_route.public_default
+aws_route_table.private
+aws_route_table.public
+aws_route_table_association.private[0]
+aws_route_table_association.private[1]
+aws_route_table_association.public[0]
+aws_route_table_association.public[1]
+aws_security_group.dr
+aws_subnet.private[0]
+aws_subnet.private[1]
+aws_subnet.public[0]
+aws_subnet.public[1]
+aws_vpc.dr
+aws_vpn_connection.home[0]
+aws_vpn_gateway.vgw
+
+=== render homelab config from terraform output -json ===
+wrote /tmp/render-out/swanctl.conf
+wrote /tmp/render-out/frr.conf
+wrote /tmp/render-out/setup-xfrm.sh
+router bgp 65010
+ neighbor 169.254.44.41 remote-as 64512
+ neighbor 169.254.44.41 remote-as 64512
+        remote_addrs = 52.2.144.13
+        proposals = aes256-sha256-modp2048
+                esp_proposals = aes256-sha256-modp2048
+        remote_addrs = 52.2.144.13
+        proposals = aes256-sha256-modp2048
+                esp_proposals = aes256-sha256-modp2048
+
+=== destroy reduced ===
+aws_customer_gateway.home: Destroying... [id=cgw-5bd238b8]
+aws_customer_gateway.home: Destruction complete after 0s
+aws_vpn_gateway.vgw: Still destroying... [id=vgw-482287c8, 10s elapsed]
+aws_vpn_gateway.vgw: Destruction complete after 10s
+aws_vpc.dr: Destroying... [id=vpc-7780caa6]
+aws_vpc.dr: Destruction complete after 0s
+
+Destroy complete! Resources: 22 destroyed.
+destroy(reduced) exit: 0
+
+=== cleanup ===
+ls-aws
+fmt/validate fail flag: 0

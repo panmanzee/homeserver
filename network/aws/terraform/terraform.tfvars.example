@@ -1,0 +1,6 @@
+region              = "ap-southeast-1"
+use_localstack      = false
+customer_gateway_ip = "198.51.100.7" # my current home public IP
+budget_email        = "me@example.com"
+enable_nat          = false
+enable_dr_instance  = false

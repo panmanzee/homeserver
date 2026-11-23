@@ -4,8 +4,8 @@ Date: 2026-08-30
 Owner: pan (studying CCNA; goal = network-focused job portfolio + genuinely useful self-hosted services)
 
 This is a **roadmap**, not a design. Each project below gets its own
-brainstorm → spec → implementation cycle. Spec files live in
-`docs/superpowers/specs/`. Update the Status column as things move.
+brainstorm → spec → implementation cycle.
+Update the Status column as things move.
 
 ---
 

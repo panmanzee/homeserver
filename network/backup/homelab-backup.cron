@@ -1,0 +1,2 @@
+# installed as /etc/cron.d/homelab-backup
+30 3 * * * root nice -n 19 ionice -c3 /root/net/homelab-network/backup/backup.sh >> /var/log/homelab-backup.log 2>&1

@@ -1,0 +1,7 @@
+.terraform/
+*.tfstate*
+terraform.tfvars
+*.tfplan
+homelab-side/out/
+sim/out/
+tf-output.json

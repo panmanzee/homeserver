@@ -1,0 +1,12 @@
+# host freeze 2026-11-19: journal boundaries (collected 2026-11-21T17:18:54+07:00)
+$ journalctl --list-boots | tail -3
+IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY
+ -1 922bba916b5a45e086f6e415e9d203f4 Wed 2026-11-18 12:28:31 +07 Thu 2026-11-19 21:24:01 +07
+  0 bca166b6419d4081af0a3e2c97a8fbc2 Thu 2026-11-19 21:25:56 +07 Sat 2026-11-21 17:18:53 +07
+
+$ journalctl -b -1 -n 5 --no-pager
+Nov 19 21:23:58 panhomelab systemd[1]: Starting cloudhost-vm-guard.service - Sync allowed (port, IP) pairs for customer VMs...
+Nov 19 21:23:59 panhomelab systemd[1]: cloudhost-vm-guard.service: Deactivated successfully.
+Nov 19 21:23:59 panhomelab systemd[1]: Finished cloudhost-vm-guard.service - Sync allowed (port, IP) pairs for customer VMs.
+Nov 19 21:23:59 panhomelab systemd[1]: cloudhost-vm-guard.service: Consumed 868ms CPU time, 119.9M memory peak.
+Nov 19 21:24:01 panhomelab systemd[1]: Starting cloudhost-vm-guard.service - Sync allowed (port, IP) pairs for customer VMs...

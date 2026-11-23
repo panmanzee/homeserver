@@ -1,0 +1,98 @@
+workhub
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+eth0@if7         UP             192.168.0.102/24 metric 1024 fe80::be24:11ff:feb1:26a1/64 
+tailscale0       UNKNOWN        100.108.65.118/32 fd7a:115c:a1e0::2e28:4177/128 fe80::eddf:88f4:d2c2:adb3/64 
+docker0          DOWN           172.17.0.1/16 fe80::4c76:8ff:fec6:2ab0/64 
+br-cf9ea24b3e7f  DOWN           172.24.0.1/16 
+br-d248224a106c  DOWN           172.18.0.1/16 
+br-dabe7020aea3  UP             172.21.0.1/16 fe80::b0db:7fff:fecb:6c24/64 
+br-1457dc226f90  DOWN           172.23.0.1/16 fe80::146a:93ff:fe91:2657/64 
+br-25b56a940ddf  UP             172.20.0.1/16 fe80::5404:d7ff:fe0e:3819/64 
+br-8e2c05b14e2c  UP             172.19.0.1/16 fe80::d0af:2fff:fed3:51aa/64 
+veth492ca97@if2  UP             fe80::702a:14ff:fe8b:d883/64 
+veth6ea211a@if2  UP             fe80::c04a:b5ff:fe15:f2b8/64 
+veth2498274@if2  UP             fe80::2068:2dff:fed1:b7b4/64 
+veth9175e51@if2  UP             fe80::5c5f:66ff:fe01:7e85/64 
+vetha5adf4a@if2  UP             fe80::785c:f0ff:fe5b:dbd9/64 
+vethce139bb@if2  UP             fe80::8ec:f0ff:fe29:229b/64 
+veth0c06612@if2  UP             fe80::b8ba:43ff:fede:2a1a/64 
+vetha49ac65@if2  UP             fe80::28e4:2eff:fe47:aad4/64 
+vetha9f7114@if2  UP             fe80::e4a2:eeff:fe64:99a5/64 
+vethe8022e2@if2  UP             fe80::2403:7eff:fecf:ed8b/64 
+veth62e8f3e@if2  UP             fe80::30a3:6cff:fe5d:7bc2/64 
+vethabfd687@if2  UP             fe80::4db:1aff:fe01:dd9b/64 
+vethe3a51e7@if3  UP             fe80::e0d5:37ff:fefc:7971/64 
+veth5301459@if2  UP             fe80::2039:14ff:feaf:562b/64 
+vethb962715@if2  UP             fe80::3c5c:55ff:fe17:4dc6/64 
+vethb56b47f@if2  UP             fe80::b848:93ff:fea1:4e4d/64 
+default via 192.168.0.1 dev eth0 proto dhcp src 192.168.0.102 metric 1024 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown 
+172.18.0.0/16 dev br-d248224a106c proto kernel scope link src 172.18.0.1 linkdown 
+172.19.0.0/16 dev br-8e2c05b14e2c proto kernel scope link src 172.19.0.1 
+172.20.0.0/16 dev br-25b56a940ddf proto kernel scope link src 172.20.0.1 
+172.21.0.0/16 dev br-dabe7020aea3 proto kernel scope link src 172.21.0.1 
+172.23.0.0/16 dev br-1457dc226f90 proto kernel scope link src 172.23.0.1 linkdown 
+172.24.0.0/16 dev br-cf9ea24b3e7f proto kernel scope link src 172.24.0.1 linkdown 
+192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.102 metric 1024 
+192.168.0.1 dev eth0 proto dhcp scope link src 192.168.0.102 metric 1024 
+
+# docker
+newsfeed-api	n8n-stack-newsfeed-api	127.0.0.1:8001->8000/tcp
+sms-gateway	n8n-stack-sms-gateway	127.0.0.1:8500->8500/tcp
+discord-bot	discord-bot-discord-bot	
+actual-importer	n8n-stack-actual-importer	
+jev-decision-server	jev-decision-server-jev-decision-server	127.0.0.1:8000->8000/tcp
+vaultwarden	vaultwarden/server:1.37.2	127.0.0.1:8003->80/tcp
+homepage	ghcr.io/gethomepage/homepage:v2.2.0	127.0.0.1:8004->3000/tcp
+adguard	adguard/adguardhome:v0.107.79	80/tcp, 67-68/udp, 443/tcp, 443/udp, 853/udp, 853/tcp, 3000/udp, 5443/tcp, 100.108.65.118:53->53/tcp, 100.108.65.118:53->53/udp, 5443/udp, 6060/tcp, 127.0.0.1:8007->3000/tcp
+kanjidojo	n8n-stack-kanjidojo	127.0.0.1:8009->8000/tcp
+n8n	n8nio/n8n:latest	0.0.0.0:5678->5678/tcp, [::]:5678->5678/tcp
+rag-api	n8n-stack-rag-api	127.0.0.1:8005->8000/tcp
+dockerproxy	tecnativa/docker-socket-proxy:0.3	2375/tcp
+uptime-kuma	louislam/uptime-kuma:1.23.17	127.0.0.1:8006->3001/tcp
+postgres	pgvector/pgvector:pg16-trixie	0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+actual	actualbudget/actual-server:26.9.0	127.0.0.1:8008->5006/tcp
+
+# listening
+0.0.0.0:22
+0.0.0.0:5432
+0.0.0.0:5678
+100.108.65.118:53
+100.108.65.118%tailscale0:10000
+100.108.65.118%tailscale0:443
+100.108.65.118%tailscale0:49435
+100.108.65.118%tailscale0:8443
+100.108.65.118%tailscale0:8444
+100.108.65.118%tailscale0:8445
+100.108.65.118%tailscale0:8446
+100.108.65.118%tailscale0:8447
+100.108.65.118%tailscale0:8449
+100.108.65.118%tailscale0:8450
+[::1]:25
+127.0.0.1:20241
+127.0.0.1:25
+127.0.0.1:8000
+127.0.0.1:8001
+127.0.0.1:8003
+127.0.0.1:8004
+127.0.0.1:8005
+127.0.0.1:8006
+127.0.0.1:8007
+127.0.0.1:8008
+127.0.0.1:8009
+127.0.0.1:8500
+127.0.0.53%lo:53
+127.0.0.54:53
+[::]:22
+[::]:5432
+[::]:5678
+[fd7a:115c:a1e0::2e28:4177]%tailscale0:10000
+[fd7a:115c:a1e0::2e28:4177]%tailscale0:443
+[fd7a:115c:a1e0::2e28:4177]%tailscale0:54417
+[fd7a:115c:a1e0::2e28:4177]%tailscale0:8443
+[fd7a:115c:a1e0::2e28:4177]%tailscale0:8444
+[fd7a:115c:a1e0::2e28:4177]%tailscale0:8445
+[fd7a:115c:a1e0::2e28:4177]%tailscale0:8446
+[fd7a:115c:a1e0::2e28:4177]%tailscale0:8447
+[fd7a:115c:a1e0::2e28:4177]%tailscale0:8449
+[fd7a:115c:a1e0::2e28:4177]%tailscale0:8450

@@ -4,7 +4,6 @@ RSS → Postgres → LLM (factual Thai summary + tickers/tags) → EOD prices �
 Telegram digest, orchestrated by the existing n8n instance. Enrichment runs on
 Gemini's free tier by default (Claude Haiku optional).
 
-Design doc: [`docs/superpowers/specs/2026-08-29-newsfeed-tracker-design.md`](docs/superpowers/specs/2026-08-29-newsfeed-tracker-design.md)
 
 The AI only condenses information. It does **not** predict prices or give
 buy/sell advice.
@@ -129,7 +128,7 @@ as `rag-api`'s `/ask`):
 | `GET /` | — | the reader page |
 | `GET /api/articles` | `q,category,importance,sentiment,ticker,tag,since,until,limit,offset` | filtered/paginated article list |
 | `GET /api/facets` | — | categories/importances/sentiments/top tags/tickers, for the filter UI |
-| `GET /api/picks` | — | Today's Picks — transparent stock screener (price momentum + news attention/sentiment + best-effort P/E/valuation context), not LLM advice; backtested, does not currently beat a plain benchmark (see the accuracy-improvements spec §5, and `scripts/backtest_picks.py`); see `docs/superpowers/specs/2026-09-21-todays-picks-design.md` + `2026-09-21-picks-accuracy-improvements-design.md` |
+| `GET /api/picks` | — | Today's Picks — transparent stock screener (price momentum + news attention/sentiment + best-effort P/E/valuation context), not LLM advice; backtested, does not currently beat a plain benchmark (see `scripts/backtest_picks.py`) |
 
 Manual run:
 

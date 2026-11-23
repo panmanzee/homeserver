@@ -1,0 +1,15 @@
+# /dev/null guard evidence (collected 2026-11-21T17:18:54+07:00)
+$ stat -c "%y %n" /etc/cron.d/devnull-guard
+2026-10-23 13:03:57.661109075 +0700 /etc/cron.d/devnull-guard
+$ cat /etc/cron.d/devnull-guard
+*/5 * * * * root [ -c /dev/null ] || { rm -f /dev/null; mknod -m 666 /dev/null c 1 3; logger "devnull-guard: recreated /dev/null"; }
+$ ls -la /dev/null
+crw-rw-rw- 1 root root 1, 3 Nov 19 21:25 /dev/null
+$ journalctl --list-boots | head -3  (journal start)
+IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY
+ -1 922bba916b5a45e086f6e415e9d203f4 Wed 2026-11-18 12:28:31 +07 Thu 2026-11-19 21:24:01 +07
+  0 bca166b6419d4081af0a3e2c97a8fbc2 Thu 2026-11-19 21:25:56 +07 Sat 2026-11-21 17:18:53 +07
+$ journalctl -t CRON -g "devnull-guard" --no-pager -q | wc -l   # cron runs; grows every 5 min
+921
+$ journalctl -t root --no-pager -q | grep -c devnull-guard   # messages from logger = times it recreated /dev/null
+0

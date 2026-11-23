@@ -154,8 +154,7 @@ importance-colored rows so `breaking` visibly outranks `routine`, grouped by
 day, "Load more" paging. `GET /api/articles` + `GET /api/facets` back it —
 public within the tailnet, unauthenticated (same trust model as `rag-api`);
 the pipeline's internal endpoints (`/ingest/rss`, `/enrich`, `/notify/*`)
-keep their `X-API-Key` gate, untouched. Design:
-[`docs/superpowers/specs/2026-09-17-newsfeed-web-frontend-design.md`](n8n-stack/docs/superpowers/specs/2026-09-17-newsfeed-web-frontend-design.md).
+keep their `X-API-Key` gate, untouched..
 
 **Today's Picks** — a second tab on the same page: a tech-first (also
 healthcare + other) daily stock screener. Deliberately **not** an LLM
@@ -165,15 +164,13 @@ pick is a transparent, auditable combination of two signals already in
 Postgres (`stock_prices` momentum + `news_tickers`/`enrichments` attention
 and sentiment), with a visible formula and one honest disclaimer line — not
 an opinion. A ticker only appears if its price rose **and** its recent news
-is net-positive. `GET /api/picks`. Design:
-[`docs/superpowers/specs/2026-09-21-todays-picks-design.md`](n8n-stack/docs/superpowers/specs/2026-09-21-todays-picks-design.md).
+is net-positive. `GET /api/picks`..
 Each pick also carries P/E and other valuation data (best-effort, Yahoo —
 `prices.fetch_fundamentals`, cached; TwelveData's fundamentals endpoint is
 paywalled on the free tier and Yahoo's unauthenticated one is genuinely
 rate-limited, both confirmed live) and a plain count of the company's
 recent news by type (earnings, guidance, product, partnership, ...) —
-context, never folded into the ranking score. Design:
-[`docs/superpowers/specs/2026-09-21-picks-accuracy-improvements-design.md`](n8n-stack/docs/superpowers/specs/2026-09-21-picks-accuracy-improvements-design.md).
+context, never folded into the ranking score..
 
 **Backtested 2026-09-21** (`scripts/backtest_picks.py`, replays the exact
 screener day-by-day with no lookahead): over 14 days / 30 `(day, pick)`
@@ -313,9 +310,9 @@ above:
 │   ├── homepage/config/            # dashboard tile config (tracked in git)
 │   ├── scripts/backup.sh           # nightly pg_dumpall + volume tar (+ optional rclone off-box copy)
 │   └── n8n/workflows/              # exported n8n cron workflows
+├── network/                        # network security upgrade: zones, monitoring, backup, NetBox, AWS DR
 └── docs/
-    ├── portfolio-roadmap.md
-    └── superpowers/{specs,plans}/  # brainstorm → spec → plan, one set per service
+    └── portfolio-roadmap.md
 ```
 
 The off-the-shelf services (Vaultwarden, Uptime Kuma, Actual, AdGuard) ship no
@@ -348,12 +345,19 @@ python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
 ---
 
+## 🛡️ Network security upgrade (Nov 2026)
+
+The box started on one flat home LAN, so a hacked customer app could reach the
+Proxmox UI and every device in the house. [`network/`](network/) plans 7 security
+zones (VLANs + nftables, 433/433 checks in a lab copy), adds Zabbix monitoring with
+Telegram alerts, encrypted restic backups with a tested restore, a NetBox inventory,
+and Terraform for an AWS disaster-recovery VPN (LocalStack + strongSwan/FRR simulation). Details and limits:
+[`network/README.md`](network/README.md).
+
 ## 📌 About
 
 Personal infrastructure, built as a portfolio piece and run for real: 17
 containers, 7 of them my own services (224 tests across the three largest), the
-rest deployed and operated off-the-shelf apps, reached over a Tailscale mesh VPN. The design
-docs under [`docs/superpowers/`](docs/superpowers/) capture the full
-brainstorm → spec → plan → build cycle behind each custom service. Idle
+rest deployed and operated off-the-shelf apps, reached over a Tailscale mesh VPN. Idle
 footprint is ~1.3 GB across the whole stack — the 2013 low-power chip handles
 it comfortably.

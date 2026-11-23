@@ -1,0 +1,7 @@
+# monitoring heartbeat log of the gateway service on the host (only these fields kept)
+event_ts               2026-11-19T14:26:47.389934+00:00  (= 21:26:47 +07)
+last_heartbeat_at      2026-11-19T13:21:16.164206+00:00  (= 20:21:16 +07)
+mem_total_kib          8017768
+mem_available_kib      1871060
+swap_used_kib          3038084
+mem_available_pct      23.3

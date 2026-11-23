@@ -1,0 +1,47 @@
+table inet smbguard {
+	chain input {
+		type filter hook input priority filter - 10; policy accept;
+		tcp dport 445 iifname != "tailscale0" iifname != "lo" drop
+	}
+}
+table inet cloudhost_vm {
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+		ct state established,related accept
+		iifname "vmbr0" oifname "vmbr1" ip saddr 192.168.0.102 accept
+		oifname "vmbr1" drop
+		iifname "vmbr1" ip daddr { 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 } drop
+		iifname "vmbr1" meta nfproto ipv6 drop
+		oifname "vmbr1" meta nfproto ipv6 drop
+	}
+
+	chain input {
+		type filter hook input priority filter; policy accept;
+		iifname "vmbr1" ct state established,related accept
+		iifname "vmbr1" icmp type echo-request limit rate 5/second burst 5 packets accept
+		iifname "vmbr1" drop
+	}
+}
+table ip cloudhost_vm_nat {
+	chain post {
+		type nat hook postrouting priority srcnat; policy accept;
+		ip saddr 10.77.0.0/24 oifname "vmbr0" masquerade
+	}
+}
+table bridge cloudhost_vm_l2 {
+	set allowed {
+		type ifname . ipv4_addr
+	}
+
+	chain guard {
+		type filter hook prerouting priority dstnat; policy accept;
+		iifname "tap*" iifname . ip saddr @allowed accept
+		iifname "tap*" iifname . arp saddr ip @allowed accept
+		iifname "tap*" drop
+	}
+
+	chain forward {
+		type filter hook forward priority 0; policy accept;
+		iifname "tap*" oifname "tap*" drop
+	}
+}

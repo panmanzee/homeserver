@@ -1,0 +1,52 @@
+# zabbix 7.0 lts, own postgres, tailnet only
+services:
+  zbx-db:
+    image: postgres:16-alpine
+    container_name: zbx-db
+    restart: unless-stopped
+    mem_limit: 384m
+    environment:
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${ZBX_DB_PASSWORD}
+      POSTGRES_DB: zabbix
+    volumes:
+      - zbx-db-data:/var/lib/postgresql/data
+
+  zbx-server:
+    image: zabbix/zabbix-server-pgsql:alpine-7.0-latest
+    container_name: zbx-server
+    restart: unless-stopped
+    mem_limit: 384m
+    depends_on:
+      - zbx-db
+    environment:
+      DB_SERVER_HOST: zbx-db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${ZBX_DB_PASSWORD}
+      POSTGRES_DB: zabbix
+      ZBX_CACHESIZE: 16M
+      ZBX_STARTPOLLERS: 3
+    ports:
+      - "${TAILNET_IP}:10051:10051"
+
+  zbx-web:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+    container_name: zbx-web
+    restart: unless-stopped
+    mem_limit: 256m
+    depends_on:
+      - zbx-db
+      - zbx-server
+    environment:
+      ZBX_SERVER_HOST: zbx-server
+      DB_SERVER_HOST: zbx-db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${ZBX_DB_PASSWORD}
+      POSTGRES_DB: zabbix
+      PHP_TZ: Asia/Bangkok
+    ports:
+      - "${TAILNET_IP}:8088:8080"
+      - "127.0.0.1:8088:8080"
+
+volumes:
+  zbx-db-data:

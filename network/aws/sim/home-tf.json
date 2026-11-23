@@ -1,0 +1,2 @@
+{"homelab_asn":{"value":65010},"amazon_side_asn":{"value":64512},"tunnels":{"value":[
+{"name":"aws1","aws_outside":"172.31.0.20","cgw_inside":"169.254.10.2","aws_inside":"169.254.10.1","inside_cidr":"169.254.10.0/30","psk":"sim-only-psk"}]}}

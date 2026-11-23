@@ -1,0 +1,22 @@
+flowchart TB
+  net((Internet))
+  cf[Cloudflare edge<br/>*.pandeploy.dev]
+  ts[Tailscale tailnet<br/>100.64.0.0/10]
+  isp[ISP router<br/>192.168.0.1]
+  net --- isp
+  net --- cf
+  subgraph host["Proxmox host panhomelab (one NIC, nic0)"]
+    vmbr0["vmbr0 192.168.0.101/24<br/>flat home LAN"]
+    vmbr1["vmbr1 10.77.0.1/24<br/>customer VMs, nftables allow-list + NAT"]
+    tsh[tailscale0 100.109.143.18]
+  end
+  isp --- vmbr0
+  home[phones, laptops] --- vmbr0
+  ct101["LXC 101 workhub<br/>192.168.0.102 (DHCP)<br/>ts 100.108.65.118"] --- vmbr0
+  ct102["LXC 102 cloudhost<br/>192.168.0.104 (DHCP)<br/>ts 100.102.34.29<br/>Traefik + cloudflared"] --- vmbr0
+  ct102 -. "route 10.77.0.0/24 via host" .-> vmbr1
+  cust[customer VMs] --- vmbr1
+  cf == tunnel ==> ct102
+  ts --- tsh
+  ts --- ct101
+  ts --- ct102

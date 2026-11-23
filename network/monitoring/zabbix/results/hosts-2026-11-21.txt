@@ -1,0 +1,11 @@
+# date 2026-11-21 16:23:55
+# host.get (agent availability; 1 = available)
+host=cloudhost passive_available=1 active_available=1 iface=100.102.34.29:10050 error=''
+  system.uptime lastvalue=154692 s lastclock=1795253032
+  enabled triggers=65
+host=panhomelab passive_available=1 active_available=1 iface=100.109.143.18:10050 error=''
+  system.uptime lastvalue=154693 s lastclock=1795253033
+  enabled triggers=41
+host=workhub passive_available=1 active_available=1 iface=100.108.65.118:10050 error=''
+  system.uptime lastvalue=154680 s lastclock=1795253020
+  enabled triggers=89

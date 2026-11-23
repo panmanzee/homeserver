@@ -1,0 +1,4 @@
+# docker stats --no-stream on workhub, 2026-11-21 16:22:09, after ~20 min with 3 hosts
+zbx-db mem=165.8MiB / 384MiB (43.18% of limit) cpu=0.24%
+zbx-server mem=64.16MiB / 384MiB (16.71% of limit) cpu=0.45%
+zbx-web mem=64.07MiB / 256MiB (25.03% of limit) cpu=0.00%

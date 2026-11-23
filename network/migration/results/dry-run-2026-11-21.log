@@ -1,0 +1,151 @@
+# dry-run of every migration script, no --apply. 2026-11-21T17:18:22+07:00
+
+##### bash migration/pre-check.sh
+== host
+ok    root
+ok    pct found
+ok    nft found
+ok    ifreload found (ifupdown2)
+ok    ip_forward=1
+ok    vmbr2 not there yet
+ok    vmbr0 present
+ok    zones table not loaded yet
+== config files
+ok    vmbr2.interfaces
+ok    zones.nft syntax (nft -c)
+ok    interfaces.d is sourced
+== guests
+ok    CT 101 running
+      net0: name=eth0,bridge=vmbr0,hwaddr=BC:24:11:B1:26:A1,ip=dhcp,type=veth
+ok    CT 101 has a fixed hwaddr
+ok    CT 101 on vmbr0 (not migrated yet)
+ok    CT 101 tailscale up
+ok    CT 102 running
+      net0: name=eth0,bridge=vmbr0,hwaddr=BC:24:11:F3:44:6D,ip=dhcp,type=veth
+ok    CT 102 has a fixed hwaddr
+ok    CT 102 on vmbr0 (not migrated yet)
+ok    CT 102 tailscale up
+      live addresses now:
+      CT 101: 192.168.0.102/24
+      CT 102: 192.168.0.104/24
+== stale nft rule (DHCP drift)
+      cloudhost_vm allows saddr: 192.168.0.102, cloudhost has: 192.168.0.104
+warn  rule IP differs from cloudhost IP, see docs/incidents/2026-11-dhcp-lease-swap.md
+== safety
+      earlier migration backups in /root/migration-backup: 0
+warn  no /var/log/homelab-backup.log, run backup/backup.sh first
+      reminder: be at the console (keyboard + screen), not only on SSH/Tailscale
+== pre-check passed
+[exit 0]
+
+##### bash migration/migrate-1-bridge.sh
+== dry-run: nothing is changed (add --apply to run)
+== backup /etc/network
+[dry-run] mkdir -p /root/migration-backup/20261121-171830
+[dry-run] cp -a /etc/network/interfaces /root/migration-backup/20261121-171830/interfaces
+[dry-run] cp -a /etc/network/interfaces.d /root/migration-backup/20261121-171830/interfaces.d
+== install vmbr2 config
+[dry-run] cp /root/net/homelab-network/zones/network/vmbr2.interfaces /etc/network/interfaces.d/vmbr2
+[dry-run] ifreload -a --syntax-check
+== apply
+[dry-run] ifreload -a
+== check
+[dry-run] ip -br a show vmbr2
+[dry-run] ip -br a show vmbr0
+[dry-run] bridge vlan show dev vmbr2
+expect: vmbr2.10/.20/.30/.99 UP with 10.10.x.1/24, vmbr0 still 192.168.0.101/24
+[exit 0]
+
+##### bash migration/migrate-2-firewall.sh
+== dry-run: nothing is changed (add --apply to run)
+== backup current ruleset
+[dry-run] mkdir -p /root/migration-backup/20261121-171830
+[dry-run] nft list ruleset > /root/migration-backup/20261121-171830/nft-ruleset-before.txt
+== syntax check
+[dry-run] nft -c -f /root/net/homelab-network/zones/nftables/zones.nft
+== load zones.nft
+[dry-run] nft -f /root/net/homelab-network/zones/nftables/zones.nft
+== interim rules: cloudhost -> customer VMs while it moves from vmbr0 to vlan 30
+[dry-run] nft insert rule inet zones from_uplink ip saddr 192.168.0.104 oifname vmbr1 accept comment "migration"
+[dry-run] nft insert rule inet cloudhost_vm forward iifname vmbr0 oifname vmbr1 ip saddr 192.168.0.104 accept comment "migration"
+[dry-run] nft insert rule inet cloudhost_vm forward iifname vmbr2.30 oifname vmbr1 ip saddr 10.10.30.10 accept comment "migration"
+== check
+[dry-run] nft list table inet zones
+[dry-run] nft list table inet cloudhost_vm
+expect: both tables present, tailscale and ssh still working, customer VMs still reachable from cloudhost
+not persistent: a reboot drops the zones table. Make it persistent only in the last step (docs/migration-runbook.md step 6).
+[exit 0]
+
+##### bash migration/migrate-3-lxc.sh 101
+== dry-run: nothing is changed (add --apply to run)
+old net0: name=eth0,bridge=vmbr0,hwaddr=BC:24:11:B1:26:A1,ip=dhcp,type=veth
+new net0: name=eth0,bridge=vmbr2,tag=20,hwaddr=BC:24:11:B1:26:A1,ip=10.10.20.10/24,gw=10.10.20.1,type=veth
+note: vmbr2.20 does not exist yet (step 1); --apply would refuse
+note: zones table not loaded yet (step 2); --apply would refuse
+== backup CT 101 config
+[dry-run] mkdir -p /root/migration-backup/20261121-171831
+[dry-run] pct config 101 > /root/migration-backup/20261121-171831/ct101.conf
+== change net0
+[dry-run] pct set 101 -net0 name=eth0,bridge=vmbr2,tag=20,hwaddr=BC:24:11:B1:26:A1,ip=10.10.20.10/24,gw=10.10.20.1,type=veth
+== restart the container
+[dry-run] pct reboot 101
+[dry-run] sleep 15
+== check
+[dry-run] pct exec 101 -- ip -4 -br a show eth0
+[dry-run] pct exec 101 -- ip route
+[dry-run] pct exec 101 -- ping -c 2 10.10.20.1
+[dry-run] pct exec 101 -- ping -c 2 1.1.1.1
+[dry-run] pct exec 101 -- getent hosts example.com
+[dry-run] pct exec 101 -- tailscale status
+[dry-run] ping -c 2 10.10.20.10
+expect also: docker ps unchanged, Zabbix UI on 100.108.65.118:8088 loads, the 3 hosts still green
+note: LAN devices can no longer reach workhub on its old 192.168.0.x address (HOME -> SERVERS is drop). Use the tailnet.
+if it fails: ./rollback.sh 101 --apply
+[exit 0]
+
+##### bash migration/migrate-3-lxc.sh 102
+== dry-run: nothing is changed (add --apply to run)
+old net0: name=eth0,bridge=vmbr0,hwaddr=BC:24:11:F3:44:6D,ip=dhcp,type=veth
+new net0: name=eth0,bridge=vmbr2,tag=30,hwaddr=BC:24:11:F3:44:6D,ip=10.10.30.10/24,gw=10.10.30.1,type=veth
+note: vmbr2.30 does not exist yet (step 1); --apply would refuse
+note: zones table not loaded yet (step 2); --apply would refuse
+== backup CT 102 config
+[dry-run] mkdir -p /root/migration-backup/20261121-171832
+[dry-run] pct config 102 > /root/migration-backup/20261121-171832/ct102.conf
+== where does the guest set the customer-VM route (before the move)
+[dry-run] pct exec 102 -- sh -c grep -rn "10.77.0" /etc/netplan /etc/systemd/network /etc/network /etc/rc.local 2>/dev/null; ip route | grep 10.77
+[dry-run] pct listsnapshot 102
+== change net0
+[dry-run] pct set 102 -net0 name=eth0,bridge=vmbr2,tag=30,hwaddr=BC:24:11:F3:44:6D,ip=10.10.30.10/24,gw=10.10.30.1,type=veth
+== restart the container
+[dry-run] pct reboot 102
+[dry-run] sleep 15
+== check
+[dry-run] pct exec 102 -- ip -4 -br a show eth0
+[dry-run] pct exec 102 -- ip route
+[dry-run] pct exec 102 -- ping -c 2 10.10.30.1
+[dry-run] pct exec 102 -- ping -c 2 1.1.1.1
+[dry-run] pct exec 102 -- getent hosts example.com
+[dry-run] pct exec 102 -- tailscale status
+[dry-run] ping -c 2 10.10.30.10
+expect also: docker ps shows coolify-proxy up, cloudflared connected, one *.pandeploy.dev site answers over https,
+             route 10.77.0.0/24 via 192.168.0.101 is gone or replaced (unreachable from 10.10.30.0/24), customer VMs still reachable
+if it fails: ./rollback.sh 102 --apply
+[exit 0]
+
+##### bash migration/rollback.sh all
+== dry-run: nothing is changed (add --apply to run)
+no saved config for CT 102 with bridge=vmbr0 under /root/migration-backup, cannot restore
+no saved config for CT 101 with bridge=vmbr0 under /root/migration-backup, cannot restore
+== remove the rules tagged migration from the old cloudhost_vm table
+== remove zone firewall
+[dry-run] nft delete table inet zones
+[dry-run] nft delete table ip zones_nat
+[dry-run] nft list tables
+== remove vmbr2
+[dry-run] rm -f /etc/network/interfaces.d/vmbr2
+[dry-run] ifreload -a
+[dry-run] ip -br a
+[exit 0]
+
+state md5 (ip a; nft list ruleset; pct config 101; pct config 102) before=ca08c26f3b01a0dbb3917dd8161f5210 after=ca08c26f3b01a0dbb3917dd8161f5210 IDENTICAL

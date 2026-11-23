@@ -1,0 +1,9 @@
+.env
+*.pem
+*id_rsa
+*id_ed25519
+*vault_pass*
+*.tfstate*
+.terraform/
+__pycache__/
+*.pyc

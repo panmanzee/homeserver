@@ -1,0 +1,24 @@
+  update dcim/devices {'id': 1}: ['primary_ip4']
+  update virtualization/virtual-machines {'id': 1}: ['primary_ip4']
+  update virtualization/virtual-machines {'id': 2}: ['primary_ip4']
+
+import done: created=111 updated=3 unchanged=0
+  created:dcim/device-roles = 1
+  created:dcim/device-types = 1
+  created:dcim/devices = 1
+  created:dcim/interfaces = 9
+  created:dcim/manufacturers = 1
+  created:dcim/sites = 1
+  created:extras/tags = 2
+  created:ipam/ip-addresses = 13
+  created:ipam/prefixes = 18
+  created:ipam/roles = 7
+  created:ipam/services = 41
+  created:ipam/vlan-groups = 1
+  created:ipam/vlans = 4
+  created:virtualization/cluster-types = 1
+  created:virtualization/clusters = 1
+  created:virtualization/interfaces = 5
+  created:virtualization/virtual-machines = 4
+  updated:dcim/devices = 1
+  updated:virtualization/virtual-machines = 2

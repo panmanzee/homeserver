@@ -1,0 +1,63 @@
+ redis-cache Skipped - Image is already being pulled by redis 
+ netbox-worker Skipped - Image is already being pulled by netbox 
+ postgres Pulling 
+ redis Pulling 
+ netbox Pulling 
+ redis Pulled 
+ netbox Pulled 
+ postgres Pulled 
+ Container netbox-docker-postgres-1  Running
+ Container netbox-docker-redis-1  Running
+ Container netbox-docker-redis-cache-1  Running
+ Container netbox-docker-netbox-1  Running
+ Container netbox-docker-netbox-worker-1  Running
+ Container netbox-docker-netbox-1  Waiting
+ Container netbox-docker-netbox-1  Healthy
+waiting for netbox api (first start takes a few minutes)
+netbox ready after ~10s
+ Container netbox-docker-postgres-1  Running
+ Container netbox-docker-redis-1  Running
+ Container netbox-docker-redis-cache-1  Running
+ Container netbox-docker-netbox-1  Running
+ Container netbox-docker-netbox-worker-1  Running
+ Container netbox-docker-netbox-1  Waiting
+ Container netbox-docker-netbox-1  Healthy
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+== import run 1
+  update dcim/devices {'id': 1}: ['primary_ip4']
+  update virtualization/virtual-machines {'id': 1}: ['primary_ip4']
+  update virtualization/virtual-machines {'id': 2}: ['primary_ip4']
+
+import done: created=111 updated=3 unchanged=0
+  created:dcim/device-roles = 1
+  created:dcim/device-types = 1
+  created:dcim/devices = 1
+  created:dcim/interfaces = 9
+  created:dcim/manufacturers = 1
+  created:dcim/sites = 1
+  created:extras/tags = 2
+  created:ipam/ip-addresses = 13
+  created:ipam/prefixes = 18
+  created:ipam/roles = 7
+  created:ipam/services = 41
+  created:ipam/vlan-groups = 1
+  created:ipam/vlans = 4
+  created:virtualization/cluster-types = 1
+  created:virtualization/clusters = 1
+  created:virtualization/interfaces = 5
+  created:virtualization/virtual-machines = 4
+  updated:dcim/devices = 1
+  updated:virtualization/virtual-machines = 2
+== import run 2 (must create nothing)
+
+import done: created=0 updated=0 unchanged=114
+== export
+wrote results/netbox-export-2026-11-21.txt and results/netbox-ip-plan-2026-11-21.csv
+== docker stats
+NAME                            MEM USAGE / LIMIT     MEM %     CPU %
+netbox-docker-netbox-worker-1   259.8MiB / 11.68GiB   2.17%     0.10%
+netbox-docker-netbox-1          1.185GiB / 11.68GiB   10.14%    0.00%
+netbox-docker-postgres-1        148.4MiB / 11.68GiB   1.24%     3.15%
+netbox-docker-redis-cache-1     3.574MiB / 11.68GiB   0.03%     1.83%
+netbox-docker-redis-1           4.145MiB / 11.68GiB   0.03%     1.93%
+no chromium on this box, skipping screenshot

@@ -1,0 +1,154 @@
+# zone firewall for the Proxmox host. own tables only, safe to reload:
+#   nft -c -f zones.nft && nft -f zones.nft
+# interface names: edit here to run it somewhere else
+
+define UPLINK = "vmbr0"
+define MGMT   = "vmbr2.10"
+define SRV    = "vmbr2.20"
+define DMZ    = "vmbr2.30"
+define LAB    = "vmbr2.99"
+define CUST   = "vmbr1"
+define TAIL   = "tailscale0"
+
+define HOME_NET = 192.168.0.0/24
+define CLOUDHOST = 10.10.30.10
+
+define GW_SRV  = 10.10.20.1
+define GW_DMZ  = 10.10.30.1
+define GW_LAB  = 10.10.99.1
+define GW_CUST = 10.77.0.1
+
+table inet zones
+delete table inet zones
+
+table inet zones {
+
+	chain input {
+		type filter hook input priority 0; policy accept;
+
+		ct state established,related accept
+		ct state invalid drop
+
+		iifname $MGMT accept
+		iifname $TAIL accept
+		iifname vmap { $SRV : jump in_srv, $DMZ : jump in_dmz, $LAB : jump in_lab, $CUST : jump in_cust }
+	}
+
+	# zones other than MGMT only reach their own gateway: ping, dns, ntp
+	chain in_srv {
+		icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit } accept
+		ip daddr $GW_SRV icmp type echo-request accept
+		ip daddr $GW_SRV udp dport { 53, 123 } accept
+		ip daddr $GW_SRV tcp dport 53 accept
+		limit rate 10/second burst 20 packets log prefix "zn-drop in srv: "
+		counter drop
+	}
+
+	chain in_dmz {
+		icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit } accept
+		ip daddr $GW_DMZ icmp type echo-request accept
+		ip daddr $GW_DMZ udp dport { 53, 123 } accept
+		ip daddr $GW_DMZ tcp dport 53 accept
+		limit rate 10/second burst 20 packets log prefix "zn-drop in dmz: "
+		counter drop
+	}
+
+	chain in_lab {
+		icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit } accept
+		ip daddr $GW_LAB icmp type echo-request accept
+		ip daddr $GW_LAB udp dport { 53, 123 } accept
+		ip daddr $GW_LAB tcp dport 53 accept
+		limit rate 10/second burst 20 packets log prefix "zn-drop in lab: "
+		counter drop
+	}
+
+	chain in_cust {
+		icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit } accept
+		ip daddr $GW_CUST icmp type echo-request accept
+		ip daddr $GW_CUST udp dport { 53, 123 } accept
+		ip daddr $GW_CUST tcp dport 53 accept
+		limit rate 10/second burst 20 packets log prefix "zn-drop in cust: "
+		counter drop
+	}
+
+	chain forward {
+		type filter hook forward priority 0; policy drop;
+
+		ct state established,related accept
+		ct state invalid drop
+
+		iifname vmap {
+			$MGMT   : jump from_mgmt,
+			$SRV    : jump from_srv,
+			$DMZ    : jump from_dmz,
+			$LAB    : jump from_lab,
+			$CUST   : jump from_cust,
+			$TAIL   : jump from_tail,
+			$UPLINK : jump from_uplink
+		}
+
+		limit rate 10/second burst 20 packets log prefix "zn-drop fwd other: "
+		counter drop
+	}
+
+	chain from_mgmt {
+		oifname { $SRV, $DMZ, $CUST, $UPLINK } accept
+		limit rate 10/second burst 20 packets log prefix "zn-drop mgmt: "
+		counter drop
+	}
+
+	chain from_srv {
+		oifname $MGMT tcp dport 10051 accept
+		oifname $DMZ tcp dport { 80, 443 } accept
+		oifname $UPLINK ip daddr != $HOME_NET accept
+		limit rate 10/second burst 20 packets log prefix "zn-drop srv: "
+		counter drop
+	}
+
+	chain from_dmz {
+		oifname $MGMT tcp dport 10051 accept
+		oifname $SRV tcp dport 8009 accept
+		# only cloudhost itself opens connections to customer VMs (web terminal, app ports)
+		oifname $CUST ip saddr $CLOUDHOST accept
+		oifname $UPLINK ip daddr != $HOME_NET accept
+		limit rate 10/second burst 20 packets log prefix "zn-drop dmz: "
+		counter drop
+	}
+
+	chain from_lab {
+		oifname $UPLINK ip daddr != $HOME_NET accept
+		limit rate 10/second burst 20 packets log prefix "zn-drop lab: "
+		counter drop
+	}
+
+	chain from_cust {
+		oifname $UPLINK ip daddr != $HOME_NET accept
+		limit rate 10/second burst 20 packets log prefix "zn-drop cust: "
+		counter drop
+	}
+
+	chain from_tail {
+		oifname $MGMT tcp dport { 22, 80, 443, 8006 } accept
+		oifname $SRV accept
+		oifname $DMZ tcp dport { 22, 80, 443 } accept
+		limit rate 10/second burst 20 packets log prefix "zn-drop tail: "
+		counter drop
+	}
+
+	# from the home lan / isp side: only home devices to the dmz web ports
+	chain from_uplink {
+		ip saddr $HOME_NET oifname $DMZ tcp dport { 80, 443 } accept
+		limit rate 5/minute burst 10 packets log prefix "zn-drop uplink: "
+		counter drop
+	}
+}
+
+table ip zones_nat
+delete table ip zones_nat
+
+table ip zones_nat {
+	chain post {
+		type nat hook postrouting priority srcnat; policy accept;
+		ip saddr 10.10.0.0/16 oifname $UPLINK masquerade
+	}
+}

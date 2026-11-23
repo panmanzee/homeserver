@@ -1,0 +1,279 @@
+table inet filter {
+	chain input {
+		type filter hook input priority filter; policy accept;
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+	}
+
+	chain output {
+		type filter hook output priority filter; policy accept;
+	}
+}
+# Warning: table ip filter is managed by iptables-nft, do not touch!
+table ip filter {
+	chain ts-input {
+		ip saddr 100.108.65.118 iifname "lo" counter packets 0 bytes 0 accept
+		iifname "tailscale0" counter packets 0 bytes 0 accept
+		udp dport 41641 counter packets 694 bytes 41640 accept
+		ip saddr 100.115.92.0/23 iifname != "tailscale0" counter packets 0 bytes 0 return
+		ip saddr 100.64.0.0/10 iifname != "tailscale0" counter packets 0 bytes 0 drop
+	}
+
+	chain ts-forward {
+		iifname "tailscale0" counter packets 0 bytes 0 meta mark set mark and 0xff00ffff xor 0x40000
+		meta mark & 0x00ff0000 == 0x00040000 counter packets 0 bytes 0 accept
+		ip saddr 100.64.0.0/10 oifname "tailscale0" counter packets 0 bytes 0 drop
+		oifname "tailscale0" counter packets 0 bytes 0 accept
+	}
+
+	chain INPUT {
+		type filter hook input priority filter; policy accept;
+		counter packets 188718 bytes 24054051 jump ts-input
+	}
+
+	chain FORWARD {
+		type filter hook forward priority filter; policy accept;
+		counter packets 1763552 bytes 364236348 jump DOCKER-USER
+		counter packets 1763552 bytes 364236348 jump DOCKER-FORWARD
+		counter packets 0 bytes 0 jump ts-forward
+	}
+
+	chain DOCKER {
+		ip daddr 172.19.0.12 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 8000 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.11 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 8000 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.14 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 3001 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.13 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 5678 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.5 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 5432 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.10 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 5006 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.9 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 80 counter packets 0 bytes 0 accept
+		ip daddr 172.20.0.2 iifname != "br-25b56a940ddf" oifname "br-25b56a940ddf" tcp dport 8000 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.7 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 8500 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.6 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 8000 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.3 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 3000 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.2 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 3000 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.2 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" udp dport 53 counter packets 0 bytes 0 accept
+		ip daddr 172.19.0.2 iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" tcp dport 53 counter packets 0 bytes 0 accept
+		iifname != "br-cf9ea24b3e7f" oifname "br-cf9ea24b3e7f" counter packets 0 bytes 0 drop
+		iifname != "br-d248224a106c" oifname "br-d248224a106c" counter packets 0 bytes 0 drop
+		iifname != "br-dabe7020aea3" oifname "br-dabe7020aea3" counter packets 0 bytes 0 drop
+		iifname != "br-1457dc226f90" oifname "br-1457dc226f90" counter packets 0 bytes 0 drop
+		iifname != "br-25b56a940ddf" oifname "br-25b56a940ddf" counter packets 0 bytes 0 drop
+		iifname != "br-8e2c05b14e2c" oifname "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		iifname != "docker0" oifname "docker0" counter packets 0 bytes 0 drop
+	}
+
+	chain DOCKER-FORWARD {
+		counter packets 1763552 bytes 364236348 jump DOCKER-CT
+		counter packets 51267 bytes 40347378 jump DOCKER-INTERNAL
+		counter packets 51267 bytes 40347378 jump DOCKER-BRIDGE
+		iifname "br-cf9ea24b3e7f" counter packets 0 bytes 0 accept
+		iifname "br-d248224a106c" counter packets 0 bytes 0 accept
+		iifname "br-dabe7020aea3" counter packets 7933 bytes 653925 accept
+		iifname "br-1457dc226f90" counter packets 445 bytes 47541 accept
+		iifname "br-25b56a940ddf" counter packets 7667 bytes 2635506 accept
+		iifname "br-8e2c05b14e2c" counter packets 32997 bytes 5676157 accept
+		iifname "docker0" counter packets 2225 bytes 31334249 accept
+	}
+
+	chain DOCKER-BRIDGE {
+		oifname "br-cf9ea24b3e7f" counter packets 0 bytes 0 jump DOCKER
+		oifname "br-d248224a106c" counter packets 0 bytes 0 jump DOCKER
+		oifname "br-dabe7020aea3" counter packets 0 bytes 0 jump DOCKER
+		oifname "br-1457dc226f90" counter packets 0 bytes 0 jump DOCKER
+		oifname "br-25b56a940ddf" counter packets 0 bytes 0 jump DOCKER
+		oifname "br-8e2c05b14e2c" counter packets 759 bytes 45540 jump DOCKER
+		oifname "docker0" counter packets 0 bytes 0 jump DOCKER
+	}
+
+	chain DOCKER-CT {
+		oifname "br-cf9ea24b3e7f" ct state related,established counter packets 0 bytes 0 accept
+		oifname "br-d248224a106c" ct state related,established counter packets 0 bytes 0 accept
+		oifname "br-dabe7020aea3" ct state related,established counter packets 7973 bytes 748885 accept
+		oifname "br-1457dc226f90" ct state related,established counter packets 521 bytes 1482238 accept
+		oifname "br-25b56a940ddf" ct state related,established counter packets 7096 bytes 3888002 accept
+		oifname "br-8e2c05b14e2c" ct state related,established counter packets 1690536 bytes 317344633 accept
+		oifname "docker0" ct state related,established counter packets 6159 bytes 425212 accept
+	}
+
+	chain DOCKER-INTERNAL {
+	}
+
+	chain DOCKER-USER {
+		ip saddr != 192.168.0.101 iifname "eth0" tcp dport 5678 ct state new counter packets 0 bytes 0 drop
+		ip saddr != 192.168.0.101 iifname "eth0" tcp dport 5432 ct state new counter packets 0 bytes 0 drop
+	}
+}
+# Warning: table ip nat is managed by iptables-nft, do not touch!
+table ip nat {
+	chain ts-postrouting {
+		meta mark & 0x00ff0000 == 0x00040000 counter packets 0 bytes 0 masquerade
+	}
+
+	chain POSTROUTING {
+		type nat hook postrouting priority srcnat; policy accept;
+		ip saddr 172.17.0.0/16 oifname != "docker0" counter packets 18 bytes 1272 masquerade
+		ip saddr 172.19.0.0/16 oifname != "br-8e2c05b14e2c" counter packets 829 bytes 55332 masquerade
+		ip saddr 172.20.0.0/16 oifname != "br-25b56a940ddf" counter packets 667 bytes 40020 masquerade
+		ip saddr 172.23.0.0/16 oifname != "br-1457dc226f90" counter packets 9 bytes 540 masquerade
+		ip saddr 172.21.0.0/16 oifname != "br-dabe7020aea3" counter packets 35 bytes 2100 masquerade
+		ip saddr 172.18.0.0/16 oifname != "br-d248224a106c" counter packets 0 bytes 0 masquerade
+		ip saddr 172.24.0.0/16 oifname != "br-cf9ea24b3e7f" counter packets 0 bytes 0 masquerade
+		counter packets 4718 bytes 331418 jump ts-postrouting
+	}
+
+	chain DOCKER {
+		ip daddr 100.108.65.118 iifname != "br-8e2c05b14e2c" tcp dport 53 counter packets 0 bytes 0 dnat to 172.19.0.2:53
+		ip daddr 100.108.65.118 iifname != "br-8e2c05b14e2c" udp dport 53 counter packets 0 bytes 0 dnat to 172.19.0.2:53
+		ip daddr 127.0.0.1 iifname != "br-8e2c05b14e2c" tcp dport 8007 counter packets 0 bytes 0 dnat to 172.19.0.2:3000
+		ip daddr 127.0.0.1 iifname != "br-8e2c05b14e2c" tcp dport 8004 counter packets 0 bytes 0 dnat to 172.19.0.3:3000
+		ip daddr 127.0.0.1 iifname != "br-8e2c05b14e2c" tcp dport 8001 counter packets 0 bytes 0 dnat to 172.19.0.6:8000
+		ip daddr 127.0.0.1 iifname != "br-8e2c05b14e2c" tcp dport 8500 counter packets 0 bytes 0 dnat to 172.19.0.7:8500
+		ip daddr 127.0.0.1 iifname != "br-25b56a940ddf" tcp dport 8000 counter packets 0 bytes 0 dnat to 172.20.0.2:8000
+		ip daddr 127.0.0.1 iifname != "br-8e2c05b14e2c" tcp dport 8003 counter packets 0 bytes 0 dnat to 172.19.0.9:80
+		ip daddr 127.0.0.1 iifname != "br-8e2c05b14e2c" tcp dport 8008 counter packets 0 bytes 0 dnat to 172.19.0.10:5006
+		iifname != "br-8e2c05b14e2c" tcp dport 5432 counter packets 0 bytes 0 dnat to 172.19.0.5:5432
+		iifname != "br-8e2c05b14e2c" tcp dport 5678 counter packets 0 bytes 0 dnat to 172.19.0.13:5678
+		ip daddr 127.0.0.1 iifname != "br-8e2c05b14e2c" tcp dport 8006 counter packets 0 bytes 0 dnat to 172.19.0.14:3001
+		ip daddr 127.0.0.1 iifname != "br-8e2c05b14e2c" tcp dport 8005 counter packets 0 bytes 0 dnat to 172.19.0.11:8000
+		ip daddr 127.0.0.1 iifname != "br-8e2c05b14e2c" tcp dport 8009 counter packets 0 bytes 0 dnat to 172.19.0.12:8000
+	}
+
+	chain PREROUTING {
+		type nat hook prerouting priority dstnat; policy accept;
+		fib daddr type local counter packets 0 bytes 0 jump DOCKER
+	}
+
+	chain OUTPUT {
+		type nat hook output priority dstnat; policy accept;
+		ip daddr != 127.0.0.0/8 fib daddr type local counter packets 0 bytes 0 jump DOCKER
+	}
+}
+# Warning: table ip6 filter is managed by iptables-nft, do not touch!
+table ip6 filter {
+	chain ts-input {
+		ip6 saddr fd7a:115c:a1e0::2e28:4177 iifname "lo" counter packets 0 bytes 0 accept
+		iifname "tailscale0" counter packets 0 bytes 0 accept
+		udp dport 41641 counter packets 0 bytes 0 accept
+	}
+
+	chain ts-forward {
+		iifname "tailscale0" counter packets 0 bytes 0 meta mark set mark and 0xff00ffff xor 0x40000
+		meta mark & 0x00ff0000 == 0x00040000 counter packets 0 bytes 0 accept
+		oifname "tailscale0" counter packets 0 bytes 0 accept
+	}
+
+	chain INPUT {
+		type filter hook input priority filter; policy accept;
+		counter packets 8 bytes 560 jump ts-input
+	}
+
+	chain FORWARD {
+		type filter hook forward priority filter; policy accept;
+		counter packets 0 bytes 0 jump DOCKER-USER
+		counter packets 0 bytes 0 jump DOCKER-FORWARD
+		counter packets 0 bytes 0 jump ts-forward
+	}
+
+	chain DOCKER {
+	}
+
+	chain DOCKER-FORWARD {
+		counter packets 0 bytes 0 jump DOCKER-CT
+		counter packets 0 bytes 0 jump DOCKER-INTERNAL
+		counter packets 0 bytes 0 jump DOCKER-BRIDGE
+	}
+
+	chain DOCKER-BRIDGE {
+	}
+
+	chain DOCKER-CT {
+	}
+
+	chain DOCKER-INTERNAL {
+	}
+
+	chain DOCKER-USER {
+	}
+}
+# Warning: table ip6 nat is managed by iptables-nft, do not touch!
+table ip6 nat {
+	chain ts-postrouting {
+		meta mark & 0x00ff0000 == 0x00040000 counter packets 0 bytes 0 # Warning: XT target MASQUERADE not found
+xt target "MASQUERADE"
+	}
+
+	chain POSTROUTING {
+		type nat hook postrouting priority srcnat; policy accept;
+		counter packets 4 bytes 320 jump ts-postrouting
+	}
+
+	chain DOCKER {
+	}
+
+	chain PREROUTING {
+		type nat hook prerouting priority dstnat; policy accept;
+		fib daddr type local counter packets 0 bytes 0 jump DOCKER
+	}
+
+	chain OUTPUT {
+		type nat hook output priority dstnat; policy accept;
+		ip6 daddr != ::1 fib daddr type local counter packets 0 bytes 0 jump DOCKER
+	}
+}
+# Warning: table ip mangle is managed by iptables-nft, do not touch!
+table ip mangle {
+	chain PREROUTING {
+		type filter hook prerouting priority mangle; policy accept;
+		ct state related,established ct mark and 0xff0000 != 0x0 counter packets 14947 bytes 1555813 meta mark set ct mark and 0xff0000
+	}
+
+	chain OUTPUT {
+		type route hook output priority mangle; policy accept;
+		ct state new meta mark & 0x00ff0000 != 0x00000000 counter packets 624 bytes 44745 ct mark set mark and 0xff0000
+	}
+}
+# Warning: table ip6 mangle is managed by iptables-nft, do not touch!
+table ip6 mangle {
+	chain PREROUTING {
+		type filter hook prerouting priority mangle; policy accept;
+		ct state related,established ct mark and 0xff0000 != 0x0 counter packets 0 bytes 0 meta mark set ct mark and 0xff0000
+	}
+
+	chain OUTPUT {
+		type route hook output priority mangle; policy accept;
+		ct state new meta mark & 0x00ff0000 != 0x00000000 counter packets 0 bytes 0 ct mark set mark and 0xff0000
+	}
+}
+table ip raw {
+	chain PREROUTING {
+		type filter hook prerouting priority raw; policy accept;
+		ip daddr 172.19.0.2 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 127.0.0.1 iifname != "lo" tcp dport 8007 counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.3 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.4 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 127.0.0.1 iifname != "lo" tcp dport 8004 counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.6 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.7 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 127.0.0.1 iifname != "lo" tcp dport 8001 counter packets 0 bytes 0 drop
+		ip daddr 127.0.0.1 iifname != "lo" tcp dport 8500 counter packets 0 bytes 0 drop
+		ip daddr 172.20.0.2 iifname != "br-25b56a940ddf" counter packets 0 bytes 0 drop
+		ip daddr 172.21.0.2 iifname != "br-dabe7020aea3" counter packets 0 bytes 0 drop
+		ip daddr 127.0.0.1 iifname != "lo" tcp dport 8000 counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.9 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.10 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 127.0.0.1 iifname != "lo" tcp dport 8003 counter packets 0 bytes 0 drop
+		ip daddr 127.0.0.1 iifname != "lo" tcp dport 8008 counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.5 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.13 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.14 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.16 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 127.0.0.1 iifname != "lo" tcp dport 8006 counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.18 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.11 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 172.19.0.12 iifname != "br-8e2c05b14e2c" counter packets 0 bytes 0 drop
+		ip daddr 127.0.0.1 iifname != "lo" tcp dport 8005 counter packets 0 bytes 0 drop
+		ip daddr 127.0.0.1 iifname != "lo" tcp dport 8009 counter packets 0 bytes 0 drop
+	}
+}

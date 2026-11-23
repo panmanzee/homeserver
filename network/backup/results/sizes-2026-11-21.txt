@@ -1,0 +1,13 @@
+# measured 2026-11-21T17:18:06+07:00 (read-only)
+## du -sh restic repo (RESTIC_REPOSITORY from env file)
+739M	/var/backups/restic-homelab
+773390124	/var/backups/restic-homelab
+## files over 100 MB in /root/obsidian-vault (excluded by --exclude-larger-than 100M)
+424474752 /root/obsidian-vault/1027.mp4
+381259311 /root/obsidian-vault/1027_edit.mp4
+108437375 /root/obsidian-vault/Archive/project-mad/demo-vid/project_mad_demo.mp4
+426114832 /root/obsidian-vault/Archive/project-mad/demo-vid/Demi-20261026T162353Z-1-001.zip
+255310785 /root/obsidian-vault/Archive/project-mad/demo-vid/Demi-20261026T162353Z-1-001/Demi/VID20261026230101.mp4
+count=5 total_bytes=1595597055 total_GiB=1.49
+## all other backup paths, files over 100 MB
+count=2 total_bytes=1386213680

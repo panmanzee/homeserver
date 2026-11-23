@@ -1,0 +1,37 @@
+created restic repository 52f662ad90 at /var/backups/restic-homelab
+
+Please note that knowledge of your password is required to access
+the repository. Losing your password means that your data is
+irrecoverably lost.
+no parent snapshot found, will read all files
+
+Files:        4291 new,     0 changed,     0 unmodified
+Dirs:         1114 new,     0 changed,     0 unmodified
+Added to the repository: 969.434 MiB (737.330 MiB stored)
+
+processed 4291 files, 1.070 GiB in 1:04
+snapshot 69b12c5f saved
+Applying Policy: keep 7 daily, 4 weekly snapshots
+keep 1 snapshots:
+ID        Time                 Host        Tags                   Reasons          Paths                  Size
+-------------------------------------------------------------------------------------------------------------------
+69b12c5f  2026-11-21 15:44:35  panhomelab  panhomelab,2026-11-21  daily snapshot   /etc/cron.d            1.070 GiB
+                                                                  weekly snapshot  /etc/network
+                                                                                   /etc/nftables.conf
+                                                                                   /etc/pve
+                                                                                   /etc/samba
+                                                                                   /etc/systemd/system
+                                                                                   /root/mission-control
+                                                                                   /root/net
+                                                                                   /root/obsidian-vault
+-------------------------------------------------------------------------------------------------------------------
+1 snapshots
+
+using temporary cache in <tmp>/restic-check-cache-3005962550
+create exclusive lock for repository
+load indexes
+check all packs
+check snapshots, trees and blobs
+[0:00] 100.00%  1 / 1 snapshots
+no errors were found
+homelab backup OK on panhomelab 2026-11-21 (67s)

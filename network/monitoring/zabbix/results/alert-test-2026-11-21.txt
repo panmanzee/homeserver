@@ -1,0 +1,7 @@
+action 'Report problems to Zabbix administrators' enabled (actionid 3), severity >= Warning
+temporary trigger 25405 created at 2026-11-21 16:21:02
+problem event 147 clock 2026-11-21 16:21:23 name 'Telegram alert test (temporary)'
+problem alert 3 status=1 (sent) retries=0 error='' subject='Problem: Telegram alert test (temporary)'
+recovery event 148 clock 2026-11-21 16:21:53
+recovery alert 4 status=1 (sent) retries=0 error='' subject='Resolved in 30s: Telegram alert test (temporary)'
+temporary trigger deleted

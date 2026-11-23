@@ -1,0 +1,39 @@
+flowchart TB
+  net((Internet))
+  cf[Cloudflare edge]
+  ts[Tailscale tailnet]
+  isp[ISP router 192.168.0.1]
+  net --- isp
+  net --- cf
+  subgraph host["Proxmox host panhomelab: router + nftables (zones.nft)"]
+    vmbr0["vmbr0 uplink<br/>192.168.0.101/24"]
+    subgraph vmbr2["vmbr2 VLAN-aware, no physical port"]
+      v10["vmbr2.10 MGMT<br/>10.10.10.1/24"]
+      v20["vmbr2.20 SERVERS<br/>10.10.20.1/24"]
+      v30["vmbr2.30 DMZ<br/>10.10.30.1/24"]
+      v99["vmbr2.99 LAB<br/>10.10.99.1/24"]
+    end
+    vmbr1["vmbr1 CUSTVM<br/>10.77.0.1/24"]
+    tsh[tailscale0]
+    vpn["strongSwan + FRR<br/>AS 65010<br/>advertises 10.10.0.0/16"]
+  end
+  isp --- vmbr0
+  home[HOME devices] --- vmbr0
+  ct101["LXC 101 workhub<br/>10.10.20.10 tag 20"] --- v20
+  ct102["LXC 102 cloudhost<br/>10.10.30.10 tag 30"] --- v30
+  mon["Zabbix, NetBox<br/>10.10.10.x"] --- v10
+  lab[test guests] --- v99
+  cust[customer VMs] --- vmbr1
+  cf == tunnel ==> ct102
+  ts --- tsh
+  v10 --- vpn
+  v20 --- vpn
+  v30 --- vpn
+  subgraph aws["AWS VPC 10.50.0.0/16 (VGW AS 64512)"]
+    vgw[VPN gateway]
+    priv["private 10.50.11.0/24<br/>DR instance (off by default)"]
+    pub["public 10.50.1.0/24"]
+  end
+  vpn == "IPsec x2 + eBGP" ==> vgw
+  vgw --- priv
+  vgw --- pub

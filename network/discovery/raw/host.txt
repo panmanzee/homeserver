@@ -1,0 +1,64 @@
+# host
+panhomelab
+pve-manager/9.2.21/4f6e0ac86f9e8c7f (running kernel: 7.0.14-25-pve)
+ 15:41:00 up 1 day, 18:15,  0 users,  load average: 0.66, 0.64, 0.71
+
+# cpu/mem
+4
+               total        used        free      shared  buff/cache   available
+Mem:            7829        3648         194         285        4577        4181
+Swap:           9785        1563        8222
+
+# interfaces
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+nic0             UP             
+tailscale0       UNKNOWN        100.109.143.18/32 fd7a:115c:a1e0::5d28:8f13/128 fe80::de41:214b:d8d5:ffe5/64 
+vmbr0            UP             192.168.0.101/24 fe80::223:24ff:fe77:4f53/64 
+vmbr1            UNKNOWN        10.77.0.1/24 fe80::9cbd:9eff:feda:15b2/64 
+veth102i0@if2    UP             
+veth101i0@if2    UP             
+
+# routes
+default via 192.168.0.1 dev vmbr0 proto kernel onlink 
+10.77.0.0/24 dev vmbr1 proto kernel scope link src 10.77.0.1 
+192.168.0.0/24 dev vmbr0 proto kernel scope link src 192.168.0.101 
+
+# bridges
+2: nic0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 master vmbr0 state forwarding priority 32 cost 5 
+6: veth102i0@nic0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 master vmbr0 state forwarding priority 32 cost 2 
+7: veth101i0@nic0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 master vmbr0 state forwarding priority 32 cost 2 
+port              vlan-id  
+nic0              1 PVID Egress Untagged
+vmbr0             1 PVID Egress Untagged
+vmbr1             1 PVID Egress Untagged
+veth102i0         1 PVID Egress Untagged
+veth101i0         1 PVID Egress Untagged
+
+# guests
+VMID       Status     Lock         Name                
+100        stopped                 old-ct100           
+101        running                 workhub             
+102        running                 cloudhost           
+      VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID       
+      9000 ubuntu-2404-template stopped    512                3.50 0         
+
+# listening
+0.0.0.0:111
+0.0.0.0:22
+0.0.0.0:445
+100.109.143.18:8791
+100.109.143.18%tailscale0:62637
+100.109.143.18%tailscale0:8452
+[::]:111
+[::1]:25
+127.0.0.1:25
+127.0.0.1:34745
+127.0.0.1:85
+127.0.0.1:8791
+127.0.0.1:9119
+[::]:22
+*:3128
+[::]:445
+*:8006
+[fd7a:115c:a1e0::5d28:8f13]%tailscale0:35600
+[fd7a:115c:a1e0::5d28:8f13]%tailscale0:8452
